@@ -1,0 +1,25 @@
+{
+  "name": "flowdesk",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "type-check": "turbo type-check",
+    "db:push": "npm run db:push --workspace=@flowdesk/db",
+    "db:generate": "npm run generate --workspace=@flowdesk/db",
+    "db:studio": "npm run studio --workspace=@flowdesk/db"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "npm@10.9.0"
+}
