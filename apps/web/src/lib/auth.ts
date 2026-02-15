@@ -7,7 +7,7 @@ import Credentials from 'next-auth/providers/credentials';
 import { signInSchema } from '@flowdesk/types';
 import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
-import { users } from '@flowdesk/db/schema';
+import { users } from '@flowdesk/db';
 import { z } from 'zod';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({

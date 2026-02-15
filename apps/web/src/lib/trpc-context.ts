@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth';
-import type { Session, Membership } from '@flowdesk/trpc/context';
+import type { Session, Membership } from '@flowdesk/trpc';
 import { db } from '@flowdesk/db';
-import { orgMembers } from '@flowdesk/db/schema';
+import { orgMembers } from '@flowdesk/db';
 import { eq } from 'drizzle-orm';
 
 export async function createContext() {
