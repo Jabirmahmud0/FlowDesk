@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { ThemeProvider } from '@/components/providers/theme-provider';
 import { TRPCProvider } from '@/components/providers/trpc-provider';
 import { SessionProvider } from '@/components/providers/session-provider';
+import { SocketProvider } from '@/components/providers/socket-provider';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -20,10 +21,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     rel="stylesheet"
                 />
             </head>
-            <body className="min-h-screen antialiased">
+            <body className="min-h-screen antialiased" suppressHydrationWarning>
                 <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
                     <SessionProvider>
-                        <TRPCProvider>{children}</TRPCProvider>
+                        <TRPCProvider>
+                            <SocketProvider>{children}</SocketProvider>
+                        </TRPCProvider>
                     </SessionProvider>
                 </ThemeProvider>
             </body>

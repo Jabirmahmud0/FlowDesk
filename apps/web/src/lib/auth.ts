@@ -1,62 +1,68 @@
 import NextAuth from 'next-auth';
 import { DrizzleAdapter } from '@auth/drizzle-adapter';
 import { db } from '@flowdesk/db';
-import Google from 'next-auth/providers/google';
-import GitHub from 'next-auth/providers/github';
 import Credentials from 'next-auth/providers/credentials';
-import { signInSchema } from '@flowdesk/types';
-import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 import { users } from '@flowdesk/db';
-import { z } from 'zod';
+import { adminAuth } from './firebase/admin';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
     adapter: DrizzleAdapter(db),
     providers: [
-        Google({
-            clientId: process.env.GOOGLE_CLIENT_ID,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        }),
-        GitHub({
-            clientId: process.env.GITHUB_CLIENT_ID,
-            clientSecret: process.env.GITHUB_CLIENT_SECRET,
-        }),
         Credentials({
             credentials: {
-                email: { label: 'Email', type: 'email' },
-                password: { label: 'Password', type: 'password' },
+                idToken: { label: 'ID Token', type: 'text' },
             },
             async authorize(credentials) {
-                const parsed = signInSchema.safeParse(credentials);
+                const idToken = credentials?.idToken as string;
 
-                if (!parsed.success) {
+                if (!idToken) {
                     return null;
                 }
 
-                const { email, password } = parsed.data;
+                try {
+                    const decodedToken = await adminAuth.verifyIdToken(idToken);
+                    const { email, uid, name, picture } = decodedToken;
 
-                const user = await db.query.users.findFirst({
-                    where: eq(users.email, email),
-                });
+                    if (!email) {
+                        return null;
+                    }
 
-                if (!user || !user.passwordHash) {
+                    // Check if user exists
+                    let user = await db.query.users.findFirst({
+                        where: eq(users.email, email),
+                    });
+
+                    if (!user) {
+                        // Create user if not exists
+                        // Note: We might want to link the Firebase UID to the user in the future,
+                        // but for now we'll rely on email as the unique identifier syncing mechanism.
+                        // Ideally, we should add a 'firebaseUid' column to the users table or accounts table.
+                        // For this implementation, we'll create a basic user record.
+                        const [newUser] = await db
+                            .insert(users)
+                            .values({
+                                name: name || 'Unknown User',
+                                email: email,
+                                image: picture,
+                                emailVerified: decodedToken.email_verified ? new Date() : null,
+                            })
+                            .returning();
+                        user = newUser;
+                    }
+
+                    return user;
+                } catch (error) {
+                    console.error('Error verifying Firebase token:', error);
                     return null;
                 }
-
-                const passwordsMatch = await bcrypt.compare(password, user.passwordHash);
-
-                if (!passwordsMatch) {
-                    return null;
-                }
-
-                return user;
             },
         }),
     ],
     callbacks: {
-        async session({ session, user, token }) {
-            if (session.user) {
-                session.user.id = token.sub!;
+        async session({ session, token }) {
+            if (session.user && token.sub) {
+                session.user.id = token.sub;
             }
             return session;
         },

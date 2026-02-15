@@ -33,37 +33,50 @@ import {
     createDocumentSchema,
     updateDocumentSchema,
 } from '@flowdesk/types';
-import { eq, and, desc, asc, sql, ilike } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, ilike, relations } from 'drizzle-orm';
+import { broadcast } from './lib/socket';
 import { randomUUID } from 'crypto';
+import { billingRouter } from './routers/billing';
 
 // ─── Organization Router ────────────────────────────────────────────
 export const orgRouter = router({
+    hello: publicProcedure.query(() => {
+        return { message: 'Hello from tRPC' };
+    }),
     create: protectedProcedure.input(createOrgSchema).mutation(async ({ ctx, input }) => {
-        const [org] = await ctx.db
-            .insert(organizations)
-            .values({
-                name: input.name,
-                slug: input.slug,
+        // console.log('[TRPC] org.create called with:', input);
+        // console.log('[TRPC] User:', ctx.user.id);
+        try {
+            const [org] = await ctx.db
+                .insert(organizations)
+                .values({
+                    name: input.name,
+                    slug: input.slug,
+                    createdBy: ctx.user.id,
+                })
+                .returning();
+            console.log('[TRPC] Org created:', org.id);
+
+            // Add creator as OWNER
+            await ctx.db.insert(orgMembers).values({
+                orgId: org.id,
+                userId: ctx.user.id,
+                role: 'OWNER',
+            });
+
+            // Create default workspace
+            await ctx.db.insert(workspaces).values({
+                orgId: org.id,
+                name: 'General',
+                slug: 'general',
                 createdBy: ctx.user.id,
-            })
-            .returning();
+            });
 
-        // Add creator as OWNER
-        await ctx.db.insert(orgMembers).values({
-            orgId: org.id,
-            userId: ctx.user.id,
-            role: 'OWNER',
-        });
-
-        // Create default workspace
-        await ctx.db.insert(workspaces).values({
-            orgId: org.id,
-            name: 'General',
-            slug: 'general',
-            createdBy: ctx.user.id,
-        });
-
-        return org;
+            return org;
+        } catch (error: any) {
+            console.error('[TRPC] org.create failed:', error);
+            throw error;
+        }
     }),
 
     getBySlug: protectedProcedure
@@ -100,7 +113,7 @@ export const orgRouter = router({
             return { success: true };
         }),
 
-    listForUser: protectedProcedure.query(async ({ ctx }) => {
+    list: protectedProcedure.query(async ({ ctx }) => {
         const memberships = await ctx.db.query.orgMembers.findMany({
             where: eq(orgMembers.userId, ctx.user.id),
             with: {
@@ -218,10 +231,13 @@ export const workspaceRouter = router({
         }),
 
     list: createOrgProcedure()
-        .input(z.object({ orgId: z.string().uuid() }))
+        .input(z.object({ orgId: z.string().uuid().optional() }))
         .query(async ({ ctx, input }) => {
+            const orgId = input.orgId || ctx.orgId;
+            if (!orgId) throw new Error('Organization ID required');
+
             return ctx.db.query.workspaces.findMany({
-                where: eq(workspaces.orgId, input.orgId),
+                where: eq(workspaces.orgId, orgId),
                 orderBy: [asc(workspaces.name)],
             });
         }),
@@ -350,14 +366,19 @@ export const taskRouter = router({
                 .returning();
 
             if (input.assigneeId && input.assigneeId !== ctx.user.id) {
-                await ctx.db.insert(notifications).values({
+                const notification = {
                     userId: input.assigneeId,
                     orgId: ctx.orgId!,
                     type: 'TASK_ASSIGNED',
                     title: 'New Task Assigned',
                     body: `You have been assigned to task "${task.title}"`,
                     payload: { taskId: task.id, projectId: task.projectId },
-                });
+                };
+
+                await ctx.db.insert(notifications).values(notification as any);
+
+                // Broadcast
+                await broadcast('NOTIFICATION', notification, `user:${input.assigneeId}`);
             }
 
             return task;
@@ -373,6 +394,26 @@ export const taskRouter = router({
                     labels: { with: { label: true } },
                 },
                 orderBy: [asc(tasks.position)],
+            });
+        }),
+
+    myTasks: createOrgProcedure()
+        .input(z.object({ orgId: z.string().uuid() }))
+        .query(async ({ ctx, input }) => {
+            return ctx.db.query.tasks.findMany({
+                where: and(
+                    eq(tasks.orgId, input.orgId),
+                    eq(tasks.assigneeId, ctx.user.id),
+                    // exclude DONE tasks from "My Tasks" view usually? Or maybe just limit?
+                    // Let's include all for now, frontend can filter or we can add filter input later.
+                ),
+                with: {
+                    project: true,
+                    assignee: true,
+                    labels: { with: { label: true } },
+                },
+                orderBy: [desc(tasks.updatedAt)],
+                limit: 50,
             });
         }),
 
@@ -404,15 +445,23 @@ export const taskRouter = router({
                 input.assigneeId !== ctx.user.id &&
                 input.assigneeId !== currentTask?.assigneeId
             ) {
-                await ctx.db.insert(notifications).values({
+                const notification = {
                     userId: input.assigneeId,
                     orgId: ctx.orgId!,
                     type: 'TASK_ASSIGNED',
                     title: 'Task Assigned',
                     body: `You have been assigned to task "${updated.title}"`,
                     payload: { taskId: updated.id, projectId: updated.projectId },
-                });
+                };
+
+                await ctx.db.insert(notifications).values(notification as any);
+
+                // Broadcast
+                await broadcast('NOTIFICATION', notification, `user:${input.assigneeId}`);
             }
+
+            // Broadcast task update to org room (for board updates)
+            await broadcast('TASK_UPDATED', updated, `org:${ctx.orgId}`);
 
             return updated;
         }),
@@ -490,15 +539,26 @@ export const commentRouter = router({
             });
 
             if (task && task.assigneeId && task.assigneeId !== ctx.user.id) {
-                await ctx.db.insert(notifications).values({
+                const notification = {
                     userId: task.assigneeId,
                     orgId: ctx.orgId!,
                     type: 'COMMENT_ADDED',
                     title: 'New Comment',
                     body: `New comment on task "${task.title}"`,
                     payload: { taskId: task.id, projectId: task.projectId, commentId: comment.id },
-                });
+                };
+
+                await ctx.db.insert(notifications).values(notification as any);
+
+                // Broadcast notification
+                await broadcast('NOTIFICATION', notification, `user:${task.assigneeId}`);
             }
+
+            // Broadcast comment event to org or task room (task room not joined yet, so org)
+            // Or better: task:taskId. Client needs to join task room?
+            // For now, broadcast to org so board/panels update?
+            // Or specifically for comments, we might want real-time chat feel.
+            // Let's stick to simple notification broadcast for MVP.
 
             return comment;
         }),
@@ -627,6 +687,7 @@ export const appRouter = router({
     comment: commentRouter,
     document: documentRouter,
     notification: notificationRouter,
+    billing: billingRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -3,6 +3,9 @@
 import { useOrg } from '@/hooks/use-org';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
+import { DashboardStats } from '@/components/dashboard/dashboard-stats';
+import { RecentActivity } from '@/components/dashboard/recent-activity';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function DashboardPage() {
     const { org, isLoading } = useOrg();
@@ -16,36 +19,28 @@ export default function DashboardPage() {
     }
 
     return (
-        <div className="p-8">
-            <header className="flex items-center justify-between mb-8">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight mb-2">Dashboard</h1>
-                    <p className="text-muted-foreground">
-                        Welcome to {org.name}
-                    </p>
+        <div className="flex-1 space-y-4 p-8 pt-6">
+            <div className="flex items-center justify-between space-y-2">
+                <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+                <div className="flex items-center space-x-2">
+                    {/* Add date range picker or download button later */}
                 </div>
-                <Button>
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Project
-                </Button>
-            </header>
-
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {/* Placeholder stats */}
-                {['Total Projects', 'Active Tasks', 'Completed', 'Team Members'].map((stat) => (
-                    <div key={stat} className="p-6 rounded-xl border bg-card/50 backdrop-blur-sm shadow-sm">
-                        <h3 className="text-sm font-medium text-muted-foreground mb-2">{stat}</h3>
-                        <div className="text-2xl font-bold">0</div>
-                    </div>
-                ))}
             </div>
-
-            <div className="mt-8 rounded-xl border bg-card/50 backdrop-blur-sm p-8 text-center">
-                <h2 className="text-lg font-semibold mb-2">No projects yet</h2>
-                <p className="text-muted-foreground mb-4">
-                    Get started by creating your first project.
-                </p>
-                <Button variant="outline">Create Project</Button>
+            <div className="space-y-4">
+                <DashboardStats orgId={org.id} />
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+                    <RecentActivity orgId={org.id} />
+                    <Card className="col-span-4">
+                        <CardHeader>
+                            <CardTitle>Overview</CardTitle>
+                        </CardHeader>
+                        <CardContent className="pl-2">
+                            <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                                Chart Placeholder (Coming Soon)
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
         </div>
     );

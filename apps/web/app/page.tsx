@@ -11,7 +11,11 @@ import {
     Star,
 } from 'lucide-react';
 
-export default function HomePage() {
+import { auth } from '@/lib/auth';
+
+export default async function HomePage() {
+    const session = await auth();
+
     return (
         <div className="min-h-screen bg-background">
             {/* ─── Navigation ──────────────────────────────────── */}
@@ -37,18 +41,29 @@ export default function HomePage() {
                         >
                             Pricing
                         </Link>
-                        <Link
-                            href="/login"
-                            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                            Sign In
-                        </Link>
-                        <Link
-                            href="/register"
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg gradient-primary text-white text-sm font-medium hover:opacity-90 transition-opacity"
-                        >
-                            Get Started <ArrowRight className="w-4 h-4" />
-                        </Link>
+                        {session ? (
+                            <Link
+                                href="/dashboard"
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg gradient-primary text-white text-sm font-medium hover:opacity-90 transition-opacity"
+                            >
+                                Go to Dashboard <ArrowRight className="w-4 h-4" />
+                            </Link>
+                        ) : (
+                            <>
+                                <Link
+                                    href="/login"
+                                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                    Sign In
+                                </Link>
+                                <Link
+                                    href="/register"
+                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg gradient-primary text-white text-sm font-medium hover:opacity-90 transition-opacity"
+                                >
+                                    Get Started <ArrowRight className="w-4 h-4" />
+                                </Link>
+                            </>
+                        )}
                     </div>
                 </div>
             </nav>
@@ -113,12 +128,12 @@ export default function HomePage() {
                                         <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                                             <div
                                                 className={`w-2 h-2 rounded-full ${ci === 0
-                                                        ? 'bg-muted-foreground'
-                                                        : ci === 1
-                                                            ? 'bg-primary'
-                                                            : ci === 2
-                                                                ? 'bg-warning'
-                                                                : 'bg-success'
+                                                    ? 'bg-muted-foreground'
+                                                    : ci === 1
+                                                        ? 'bg-primary'
+                                                        : ci === 2
+                                                            ? 'bg-warning'
+                                                            : 'bg-success'
                                                     }`}
                                             />
                                             {col}
@@ -259,8 +274,8 @@ export default function HomePage() {
                             <div
                                 key={plan.name}
                                 className={`relative rounded-2xl border p-6 flex flex-col ${plan.popular
-                                        ? 'border-primary shadow-xl shadow-primary/10 scale-[1.02]'
-                                        : 'border-border/60 bg-card'
+                                    ? 'border-primary shadow-xl shadow-primary/10 scale-[1.02]'
+                                    : 'border-border/60 bg-card'
                                     }`}
                             >
                                 {plan.popular && (
@@ -291,8 +306,8 @@ export default function HomePage() {
                                 <Link
                                     href="/register"
                                     className={`w-full py-2.5 rounded-lg text-center text-sm font-medium transition-colors ${plan.popular
-                                            ? 'gradient-primary text-white hover:opacity-90'
-                                            : 'bg-secondary text-secondary-foreground hover:bg-accent'
+                                        ? 'gradient-primary text-white hover:opacity-90'
+                                        : 'bg-secondary text-secondary-foreground hover:bg-accent'
                                         }`}
                                 >
                                     {plan.cta}

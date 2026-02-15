@@ -41,11 +41,33 @@ export const protectedProcedure = t.procedure.use(isAuthed);
  * Middleware: Require org membership with minimum role
  */
 export const createOrgProcedure = (minRole?: 'OWNER' | 'ADMIN' | 'MEMBER') => {
-    return protectedProcedure.use(async ({ ctx, next, rawInput }) => {
-        const input = rawInput as { orgId?: string };
-        const orgId = input?.orgId || ctx.orgId;
+    return protectedProcedure.use(async (opts) => {
+        const { ctx, next } = opts;
+
+        // Handle tRPC v11 rawInput retrieval
+        let rawInput = (opts as any).rawInput;
+        if (!rawInput && typeof (opts as any).getRawInput === 'function') {
+            rawInput = await (opts as any).getRawInput();
+        }
+
+        const input = (opts as any).input;
+
+        // @ts-ignore
+        const _input = (input || rawInput || {}) as any;
+
+        // Debug log (keep enabled until verified)
+        console.log('[Middleware] Input resolution:', {
+            hasInput: !!input,
+            hasRawInput: !!rawInput,
+            extractedKeys: Object.keys(_input || {}),
+            val: _input
+        });
+
+        // Handle possible nested SuperJSON structure or direct input
+        const orgId = _input?.orgId || _input?.json?.orgId || ctx.orgId;
 
         if (!orgId) {
+            console.error('[Middleware] Missing orgId. Full Input was:', JSON.stringify(_input));
             throw new TRPCError({
                 code: 'BAD_REQUEST',
                 message: 'Organization ID is required',

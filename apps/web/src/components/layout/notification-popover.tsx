@@ -9,26 +9,48 @@ import {
 } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Bell, Check, MessageSquare, UserPlus, FileText } from 'lucide-react';
-import { ScrollArea } from '@/components/ui/scroll-area'; // Assuming we have or will use a scroll area
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { useOrg } from '@/hooks/use-org';
+import { useSocket } from '@/components/providers/socket-provider';
+import { useEffect } from 'react';
 
 export function NotificationPopover() {
     const { org } = useOrg();
+    const socket = useSocket();
     const [open, setOpen] = useState(false);
+    const utils = trpc.useUtils();
 
-    // Polling could be added here or subscription
-    const { data: unreadCount = 0 } = trpc.notification.getUnreadCount.useQuery(undefined, {
-        refetchInterval: 30000 // Poll every 30s for now
-    });
+    // Initial fetch
+    const { data: unreadCount = 0 } = trpc.notification.getUnreadCount.useQuery(
+        undefined,
+        { enabled: !!org?.id }
+    );
+
+    // Real-time listener
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleNotification = (data: any) => {
+            // Optimistically update or just invalidate
+            utils.notification.getUnreadCount.invalidate();
+            utils.notification.list.invalidate();
+            // Optional: Show toast
+        };
+
+        socket.on('NOTIFICATION', handleNotification);
+
+        return () => {
+            socket.off('NOTIFICATION', handleNotification);
+        };
+    }, [socket, utils]);
 
     const { data: notifications, refetch } = trpc.notification.list.useQuery(
         { orgId: org?.id, limit: 10 },
         { enabled: open && !!org?.id }
     );
 
-    const utils = trpc.useUtils();
+
 
     const markReadMutation = trpc.notification.markRead.useMutation({
         onSuccess: () => {
