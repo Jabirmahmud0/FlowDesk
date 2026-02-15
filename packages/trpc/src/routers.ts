@@ -349,6 +349,17 @@ export const taskRouter = router({
                 })
                 .returning();
 
+            if (input.assigneeId && input.assigneeId !== ctx.user.id) {
+                await ctx.db.insert(notifications).values({
+                    userId: input.assigneeId,
+                    orgId: ctx.orgId!,
+                    type: 'TASK_ASSIGNED',
+                    title: 'New Task Assigned',
+                    body: `You have been assigned to task "${task.title}"`,
+                    payload: { taskId: task.id, projectId: task.projectId },
+                });
+            }
+
             return task;
         }),
 
@@ -376,11 +387,33 @@ export const taskRouter = router({
             if (data.dueDate) updateData.dueDate = new Date(data.dueDate);
             if (data.status === 'DONE') updateData.completedAt = new Date();
 
+            const [currentTask] = await ctx.db
+                .select()
+                .from(tasks)
+                .where(eq(tasks.id, id));
+
             const [updated] = await ctx.db
                 .update(tasks)
                 .set(updateData)
                 .where(eq(tasks.id, id))
                 .returning();
+
+            // Notify on reassignment
+            if (
+                input.assigneeId &&
+                input.assigneeId !== ctx.user.id &&
+                input.assigneeId !== currentTask?.assigneeId
+            ) {
+                await ctx.db.insert(notifications).values({
+                    userId: input.assigneeId,
+                    orgId: ctx.orgId!,
+                    type: 'TASK_ASSIGNED',
+                    title: 'Task Assigned',
+                    body: `You have been assigned to task "${updated.title}"`,
+                    payload: { taskId: updated.id, projectId: updated.projectId },
+                });
+            }
+
             return updated;
         }),
 
@@ -450,6 +483,23 @@ export const commentRouter = router({
                     content: input.content,
                 })
                 .returning();
+
+            // Notify assignee
+            const task = await ctx.db.query.tasks.findFirst({
+                where: eq(tasks.id, input.taskId),
+            });
+
+            if (task && task.assigneeId && task.assigneeId !== ctx.user.id) {
+                await ctx.db.insert(notifications).values({
+                    userId: task.assigneeId,
+                    orgId: ctx.orgId!,
+                    type: 'COMMENT_ADDED',
+                    title: 'New Comment',
+                    body: `New comment on task "${task.title}"`,
+                    payload: { taskId: task.id, projectId: task.projectId, commentId: comment.id },
+                });
+            }
+
             return comment;
         }),
 

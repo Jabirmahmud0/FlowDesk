@@ -17,7 +17,6 @@ import { useState, useEffect } from 'react';
 import { KanbanColumn } from './column';
 import { TaskCard } from './card';
 import { trpc } from '@/lib/trpc';
-import { TaskModal } from '@/components/tasks/task-modal';
 // import { Button } from '@/components/ui/button';
 // import { Plus } from 'lucide-react';
 
@@ -34,6 +33,7 @@ type Task = {
 type Props = {
     projectId: string;
     initialTasks: Task[];
+    onTaskClick?: (task: Task) => void;
 };
 
 const COLUMNS = [
@@ -43,11 +43,9 @@ const COLUMNS = [
     { id: 'DONE', title: 'Done' },
 ] as const;
 
-export function KanbanBoard({ projectId, initialTasks }: Props) {
+export function KanbanBoard({ projectId, initialTasks, onTaskClick }: Props) {
     const [tasks, setTasks] = useState<Task[]>(initialTasks);
     const [activeTask, setActiveTask] = useState<Task | null>(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingTask, setEditingTask] = useState<Task | undefined>(undefined);
 
     const utils = trpc.useUtils();
     const updateTaskMutation = trpc.task.update.useMutation({
@@ -145,25 +143,8 @@ export function KanbanBoard({ projectId, initialTasks }: Props) {
         }
     };
 
-    const handleTaskClick = (task: Task) => {
-        setEditingTask(task);
-        setIsModalOpen(true);
-    };
-
-    const handleCloseModal = (open: boolean) => {
-        setIsModalOpen(open);
-        if (!open) setEditingTask(undefined);
-    };
-
     return (
         <div className="h-full flex flex-col">
-            <TaskModal
-                open={isModalOpen}
-                onOpenChange={handleCloseModal}
-                projectId={projectId}
-                task={editingTask}
-            />
-
             <DndContext
                 sensors={sensors}
                 collisionDetection={closestCorners}
@@ -178,7 +159,7 @@ export function KanbanBoard({ projectId, initialTasks }: Props) {
                             id={col.id}
                             title={col.title}
                             tasks={tasks.filter((t) => t.status === col.id)}
-                            onTaskClick={handleTaskClick}
+                            onTaskClick={onTaskClick!}
                         />
                     ))}
                 </div>

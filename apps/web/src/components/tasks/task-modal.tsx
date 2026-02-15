@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createTaskSchema, updateTaskSchema } from '@flowdesk/types';
 import { z } from 'zod';
@@ -16,6 +16,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Calendar } from '@/components/ui/calendar';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar as CalendarIcon } from 'lucide-react';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 import {
     Select,
     SelectContent,
@@ -23,6 +32,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Editor } from '@/components/ui/editor';
 import { trpc } from '@/lib/trpc';
 import { useWorkspace } from '@/hooks/use-workspace';
 import { useOrg } from '@/hooks/use-org';
@@ -50,6 +60,7 @@ export function TaskModal({ open, onOpenChange, task, projectId }: Props) {
             status: task?.status || 'TODO',
             priority: task?.priority || 'MEDIUM',
             assigneeId: task?.assigneeId || null,
+            dueDate: task?.dueDate ? new Date(task.dueDate) : undefined,
         },
     });
 
@@ -154,9 +165,59 @@ export function TaskModal({ open, onOpenChange, task, projectId }: Props) {
                         </Select>
                     </div>
 
+                    <div className="space-y-2 flex flex-col">
+                        <Label>Due Date</Label>
+                        <Controller
+                            control={form.control}
+                            name="dueDate"
+                            render={({ field }) => (
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant={"outline"}
+                                            className={cn(
+                                                "pl-3 text-left font-normal",
+                                                !field.value && "text-muted-foreground"
+                                            )}
+                                        >
+                                            {field.value ? (
+                                                format(field.value, "PPP")
+                                            ) : (
+                                                <span>Pick a date</span>
+                                            )}
+                                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                        <Calendar
+                                            mode="single"
+                                            selected={field.value}
+                                            onSelect={field.onChange}
+                                            disabled={(date) =>
+                                                date < new Date("1900-01-01")
+                                            }
+                                            initialFocus
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                            )}
+                        />
+                    </div>
+
                     <div className="space-y-2">
                         <Label htmlFor="description">Description</Label>
-                        <Textarea id="description" {...form.register('description')} placeholder="Add details..." />
+                        <Controller
+                            control={form.control}
+                            name="description"
+                            render={({ field }) => (
+                                <Editor
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                    placeholder="Add details..."
+                                    className="min-h-[200px]"
+                                />
+                            )}
+                        />
                     </div>
 
                     <DialogFooter>
@@ -164,8 +225,8 @@ export function TaskModal({ open, onOpenChange, task, projectId }: Props) {
                             {createMutation.isPending || updateMutation.isPending ? 'Saving...' : 'Save Task'}
                         </Button>
                     </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
+                </form >
+            </DialogContent >
+        </Dialog >
     );
 }
