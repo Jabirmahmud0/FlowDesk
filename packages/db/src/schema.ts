@@ -392,6 +392,7 @@ export const activityLog = pgTable(
             .references(() => organizations.id, { onDelete: 'cascade' }),
         taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'set null' }),
         projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+        documentId: uuid('document_id').references(() => documents.id, { onDelete: 'set null' }),
         userId: uuid('user_id')
             .notNull()
             .references(() => users.id),
@@ -402,6 +403,8 @@ export const activityLog = pgTable(
     (table) => ({
         orgIdIdx: index('activity_log_org_id_idx').on(table.orgId),
         taskIdIdx: index('activity_log_task_id_idx').on(table.taskId),
+        projectIdIdx: index('activity_log_project_id_idx').on(table.projectId),
+        documentIdIdx: index('activity_log_document_id_idx').on(table.documentId),
         createdAtIdx: index('activity_log_created_at_idx').on(table.createdAt),
     })
 );
@@ -507,15 +510,37 @@ export const notifications = pgTable(
     })
 );
 
+// ─── 20. User Settings (for notification preferences) ───────────────
+export const userSettings = pgTable(
+    'user_settings',
+    {
+        userId: uuid('user_id')
+            .notNull()
+            .primaryKey()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        emailNotifications: boolean('email_notifications').default(true).notNull(),
+        taskAssignments: boolean('task_assignments').default(true).notNull(),
+        taskUpdates: boolean('task_updates').default(true).notNull(),
+        comments: boolean('comments').default(true).notNull(),
+        mentions: boolean('mentions').default(true).notNull(),
+        dueSoon: boolean('due_soon').default(true).notNull(),
+        updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
+    },
+    (table) => ({
+        userIdIdx: index('user_settings_user_id_idx').on(table.userId),
+    })
+);
+
 // ═══════════════════════════════════════════════════════════════════
 // RELATIONS
 // ═══════════════════════════════════════════════════════════════════
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ many, one }) => ({
     orgMemberships: many(orgMembers),
     accounts: many(accounts),
     sessions: many(sessions),
     notifications: many(notifications),
+    settings: one(userSettings),
 }));
 
 export const accountsRelations = relations(accounts, ({ one }) => ({
@@ -634,6 +659,7 @@ export const activityLogRelations = relations(activityLog, ({ one }) => ({
     }),
     task: one(tasks, { fields: [activityLog.taskId], references: [tasks.id] }),
     project: one(projects, { fields: [activityLog.projectId], references: [projects.id] }),
+    document: one(documents, { fields: [activityLog.documentId], references: [documents.id] }),
     user: one(users, { fields: [activityLog.userId], references: [users.id] }),
 }));
 
@@ -672,4 +698,8 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
         fields: [notifications.orgId],
         references: [organizations.id],
     }),
+}));
+
+export const userSettingsRelations = relations(userSettings, ({ one }) => ({
+    user: one(users, { fields: [userSettings.userId], references: [users.id] }),
 }));

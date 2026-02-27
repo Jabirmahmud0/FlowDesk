@@ -15,8 +15,9 @@ export default async function TenantLayout({
     const session = await auth();
 
     if (!session) {
-        redirect('/auth/login');
+        redirect('/login');
     }
+
 
     return (
         <div className="flex h-screen overflow-hidden">

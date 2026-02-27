@@ -34,8 +34,8 @@ export default function LoginPage() {
                 console.error('NextAuth Error:', res.error);
                 setError('Failed to synchronize session. Please try again.');
             } else {
-                router.push('/');
-                router.refresh();
+                // Redirect to dashboard which will handle org routing
+                window.location.href = '/dashboard';
             }
         } catch (err: any) {
             console.error('Google Login Error:', err);
@@ -62,8 +62,8 @@ export default function LoginPage() {
                 console.error('NextAuth Error:', res.error);
                 setError('Failed to synchronize session. Please try again.');
             } else {
-                router.push('/');
-                router.refresh();
+                // Redirect to dashboard which will handle org routing
+                window.location.href = '/dashboard';
             }
         } catch (err: any) {
             console.error('Login Error:', err);

@@ -1,8 +1,9 @@
 'use client';
 
 import { trpc } from '@/lib/trpc';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle2, Clock, ListTodo } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { CheckCircle2, Clock, ListTodo, Bell, TrendingUp, AlertCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface DashboardStatsProps {
     orgId: string;
@@ -10,76 +11,100 @@ interface DashboardStatsProps {
 
 export function DashboardStats({ orgId }: DashboardStatsProps) {
     const { data: tasks, isLoading: tasksLoading } = trpc.task.myTasks.useQuery({ orgId });
-    const { data: notifications, isLoading: notifLoading } = trpc.notification.getUnreadCount.useQuery();
+    const { data: unreadCount, isLoading: notifLoading } = trpc.notification.getUnreadCount.useQuery();
+    const { data: completion } = trpc.analytics.getTaskCompletion.useQuery({ orgId });
 
     if (tasksLoading || notifLoading) {
-        return <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {[...Array(4)].map((_, i) => (
-                <Card key={i} className="animate-pulse h-32" />
-            ))}
-        </div>;
+        return (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {[...Array(4)].map((_, i) => (
+                    <Card key={i} className="h-28 animate-pulse bg-muted/50" />
+                ))}
+            </div>
+        );
     }
 
     const totalTasks = tasks?.length || 0;
     const completedTasks = tasks?.filter(t => t.status === 'DONE').length || 0;
-    const pendingTasks = totalTasks - completedTasks;
-    // Simple heuristic for "overdue" or "due soon" could be added if dates are present
-    const dueTasks = tasks?.filter(t => t.dueDate && new Date(t.dueDate) > new Date()).length || 0;
+    const overdueTasks = tasks?.filter(t =>
+        t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'DONE'
+    ).length || 0;
+    const inProgressTasks = tasks?.filter(t => t.status === 'IN_PROGRESS').length || 0;
+    const completionRate = completion?.completionRate || 0;
+
+    const stats = [
+        {
+            label: 'My Tasks',
+            value: totalTasks,
+            sub: `${inProgressTasks} in progress`,
+            icon: ListTodo,
+            color: 'text-blue-500',
+            bg: 'bg-blue-500/10',
+            trend: null,
+        },
+        {
+            label: 'Completed',
+            value: completedTasks,
+            sub: `${completionRate}% completion rate`,
+            icon: CheckCircle2,
+            color: 'text-emerald-500',
+            bg: 'bg-emerald-500/10',
+            trend: completionRate >= 50 ? 'up' : 'down',
+        },
+        {
+            label: 'Overdue',
+            value: overdueTasks,
+            sub: overdueTasks === 0 ? 'All on track 🎉' : 'Needs attention',
+            icon: overdueTasks > 0 ? AlertCircle : Clock,
+            color: overdueTasks > 0 ? 'text-red-500' : 'text-orange-500',
+            bg: overdueTasks > 0 ? 'bg-red-500/10' : 'bg-orange-500/10',
+            trend: overdueTasks === 0 ? 'up' : 'down',
+        },
+        {
+            label: 'Notifications',
+            value: unreadCount || 0,
+            sub: (unreadCount || 0) === 0 ? 'All caught up' : 'Unread alerts',
+            icon: Bell,
+            color: 'text-purple-500',
+            bg: 'bg-purple-500/10',
+            trend: null,
+        },
+    ];
 
     return (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Tasks</CardTitle>
-                    <ListTodo className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{totalTasks}</div>
-                    <p className="text-xs text-muted-foreground">Assigned to you</p>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Pending</CardTitle>
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{pendingTasks}</div>
-                    <p className="text-xs text-muted-foreground">To do or In progress</p>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Completed</CardTitle>
-                    <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{completedTasks}</div>
-                    <p className="text-xs text-muted-foreground">Finished tasks</p>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Unread Notifications</CardTitle>
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        className="h-4 w-4 text-muted-foreground"
-                    >
-                        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                        <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-                    </svg>
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{notifications || 0}</div>
-                    <p className="text-xs text-muted-foreground">Waiting for review</p>
-                </CardContent>
-            </Card>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {stats.map((stat) => (
+                <Card
+                    key={stat.label}
+                    className="relative overflow-hidden border border-border/50 hover:border-border transition-colors hover:shadow-md"
+                >
+                    <CardContent className="p-5">
+                        <div className="flex items-start justify-between">
+                            <div className="space-y-1 flex-1 min-w-0">
+                                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                    {stat.label}
+                                </p>
+                                <p className="text-3xl font-bold tracking-tight">{stat.value}</p>
+                                <p className="text-xs text-muted-foreground truncate">{stat.sub}</p>
+                            </div>
+                            <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0', stat.bg)}>
+                                <stat.icon className={cn('h-5 w-5', stat.color)} />
+                            </div>
+                        </div>
+                        {stat.trend && (
+                            <div className={cn(
+                                'mt-3 flex items-center gap-1 text-xs font-medium',
+                                stat.trend === 'up' ? 'text-emerald-500' : 'text-red-500'
+                            )}>
+                                <TrendingUp className={cn('h-3 w-3', stat.trend === 'down' && 'rotate-180')} />
+                                {stat.trend === 'up' ? 'On track' : 'Behind'}
+                            </div>
+                        )}
+                    </CardContent>
+                    {/* Subtle gradient accent */}
+                    <div className={cn('absolute bottom-0 left-0 right-0 h-0.5', stat.bg)} />
+                </Card>
+            ))}
         </div>
     );
 }

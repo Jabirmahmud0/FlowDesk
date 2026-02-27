@@ -1,0 +1,32 @@
+{
+    "$schema": "https://json.schemastore.org/tsconfig",
+    "display": "FlowDesk Base",
+    "compilerOptions": {
+        "target": "ES2022",
+        "lib": [
+            "ES2022",
+            "DOM",
+            "DOM.Iterable"
+        ],
+        "allowJs": true,
+        "checkJs": false,
+        "skipLibCheck": true,
+        "strict": true,
+        "noEmit": true,
+        "esModuleInterop": true,
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "jsx": "preserve",
+        "incremental": true,
+        "noUncheckedIndexedAccess": false,
+        "forceConsistentCasingInFileNames": true
+    },
+    "exclude": [
+        "node_modules",
+        ".next",
+        "dist",
+        ".turbo"
+    ]
+}

@@ -3,68 +3,131 @@
 import { trpc } from '@/lib/trpc';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { formatDistanceToNow } from 'date-fns';
+import {
+    CheckSquare, MessageSquare, FileText, UserPlus,
+    Plus, Pencil, Trash2, Activity
+} from 'lucide-react';
+
+const ACTION_ICONS: Record<string, any> = {
+    TASK_CREATED: Plus,
+    TASK_UPDATED: Pencil,
+    TASK_DELETED: Trash2,
+    TASK_COMPLETED: CheckSquare,
+    COMMENT_ADDED: MessageSquare,
+    COMMENT_DELETED: Trash2,
+    DOCUMENT_CREATED: FileText,
+    DOCUMENT_UPDATED: Pencil,
+    MEMBER_INVITED: UserPlus,
+};
+
+const ACTION_LABELS: Record<string, string> = {
+    TASK_CREATED: 'created a task',
+    TASK_UPDATED: 'updated a task',
+    TASK_DELETED: 'deleted a task',
+    TASK_COMPLETED: 'completed a task',
+    TASK_MOVED: 'moved a task',
+    COMMENT_ADDED: 'added a comment',
+    COMMENT_DELETED: 'deleted a comment',
+    DOCUMENT_CREATED: 'created a doc',
+    DOCUMENT_UPDATED: 'updated a doc',
+    MEMBER_INVITED: 'invited a member',
+};
+
+const ACTION_COLORS: Record<string, string> = {
+    TASK_CREATED: 'text-blue-500 bg-blue-500/10',
+    TASK_COMPLETED: 'text-emerald-500 bg-emerald-500/10',
+    TASK_DELETED: 'text-red-500 bg-red-500/10',
+    COMMENT_ADDED: 'text-purple-500 bg-purple-500/10',
+    DOCUMENT_CREATED: 'text-orange-500 bg-orange-500/10',
+    DOCUMENT_UPDATED: 'text-orange-400 bg-orange-400/10',
+    MEMBER_INVITED: 'text-pink-500 bg-pink-500/10',
+};
 
 interface RecentActivityProps {
     orgId: string;
 }
 
 export function RecentActivity({ orgId }: RecentActivityProps) {
-    // using myTasks as a proxy for "recent activity" for now, showing generally recent tasks
-    // Ideally we would have a dedicated activity feed endpoint.
-    const { data: tasks, isLoading } = trpc.task.myTasks.useQuery({ orgId });
-
-    if (isLoading) {
-        return <Card className="col-span-3">
-            <CardHeader>
-                <CardTitle>Recent Activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="space-y-4">
-                    {[...Array(5)].map((_, i) => (
-                        <div key={i} className="flex items-center gap-4 animate-pulse">
-                            <div className="h-10 w-10 rounded-full bg-muted" />
-                            <div className="space-y-2 flex-1">
-                                <div className="h-4 w-1/3 bg-muted rounded" />
-                                <div className="h-3 w-1/4 bg-muted rounded" />
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </CardContent>
-        </Card>;
-    }
-
-    const recentTasks = tasks?.slice(0, 5) || [];
+    const { data: activities, isLoading } = trpc.activity.list.useQuery({
+        orgId,
+        limit: 8,
+    });
 
     return (
-        <Card className="col-span-3">
-            <CardHeader>
-                <CardTitle>Recent Tasks</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="space-y-8">
-                    {recentTasks.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No recent activity.</p>
-                    ) : (
-                        recentTasks.map((task) => (
-                            <div key={task.id} className="flex items-center">
-                                <Avatar className="h-9 w-9">
-                                    <AvatarImage src={task.assignee?.image || undefined} alt="Avatar" />
-                                    <AvatarFallback>{task.assignee?.name?.[0] || '?'}</AvatarFallback>
-                                </Avatar>
-                                <div className="ml-4 space-y-1">
-                                    <p className="text-sm font-medium leading-none">{task.title}</p>
-                                    <p className="text-sm text-muted-foreground">
-                                        {task.project?.name} • {task.status}
-                                    </p>
-                                </div>
-                                <div className="ml-auto font-medium">
-                                    {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'No due date'}
-                                </div>
-                            </div>
-                        ))
+        <Card className="h-full border border-border/50">
+            <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                    <CardTitle className="text-base font-semibold flex items-center gap-2">
+                        <Activity className="h-4 w-4 text-muted-foreground" />
+                        Recent Activity
+                    </CardTitle>
+                    {activities && activities.length > 0 && (
+                        <Badge variant="secondary" className="text-xs">
+                            {activities.length} events
+                        </Badge>
                     )}
                 </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+                {isLoading ? (
+                    <div className="space-y-4">
+                        {[...Array(5)].map((_, i) => (
+                            <div key={i} className="flex items-center gap-3 animate-pulse">
+                                <div className="h-8 w-8 rounded-full bg-muted flex-shrink-0" />
+                                <div className="space-y-1.5 flex-1">
+                                    <div className="h-3 w-3/4 bg-muted rounded" />
+                                    <div className="h-2.5 w-1/3 bg-muted/60 rounded" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : !activities || activities.length === 0 ? (
+                    <div className="text-center py-8">
+                        <Activity className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
+                        <p className="text-sm text-muted-foreground">No activity yet.</p>
+                        <p className="text-xs text-muted-foreground mt-1">Actions will appear here.</p>
+                    </div>
+                ) : (
+                    <div className="space-y-1">
+                        {activities.map((act: any) => {
+                            const IconComp = ACTION_ICONS[act.action] || Activity;
+                            const colorClass = ACTION_COLORS[act.action] || 'text-muted-foreground bg-muted';
+                            const label = ACTION_LABELS[act.action] || act.action.toLowerCase().replace(/_/g, ' ');
+
+                            return (
+                                <div
+                                    key={act.id}
+                                    className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors group"
+                                >
+                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${colorClass}`}>
+                                        <IconComp className="h-3.5 w-3.5" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs leading-snug">
+                                            <span className="font-semibold">
+                                                {act.user?.name || act.user?.email || 'Someone'}
+                                            </span>{' '}
+                                            <span className="text-muted-foreground">{label}</span>
+                                            {(act.task?.title || act.document?.title) && (
+                                                <span className="font-medium">
+                                                    {' '}"{act.task?.title || act.document?.title}"
+                                                </span>
+                                            )}
+                                        </p>
+                                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                                            {formatDistanceToNow(new Date(act.createdAt), { addSuffix: true })}
+                                            {act.project?.name && (
+                                                <> · {act.project.name}</>
+                                            )}
+                                        </p>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
             </CardContent>
         </Card>
     );

@@ -15,6 +15,20 @@
       "when": 1772218696388,
       "tag": "0001_pink_peter_quill",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1772221432934,
+      "tag": "0002_stormy_thunderbolt_ross",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1772228583655,
+      "tag": "0003_clammy_sue_storm",
+      "breakpoints": true
     }
   ]
 }

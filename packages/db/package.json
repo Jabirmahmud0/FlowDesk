@@ -14,12 +14,12 @@
         "type-check": "tsc --noEmit"
     },
     "dependencies": {
-        "drizzle-orm": "^0.39.0",
         "@neondatabase/serverless": "^0.10.0",
-        "dotenv": "^16.4.0"
+        "dotenv": "^16.4.0",
+        "drizzle-orm": "^0.39.0"
     },
     "devDependencies": {
-        "drizzle-kit": "^0.30.0",
+        "drizzle-kit": "^0.18.1",
         "typescript": "^5.7.0"
     }
 }

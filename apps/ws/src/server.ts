@@ -5,9 +5,30 @@ import { Server, Socket } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import admin from 'firebase-admin';
-
 import path from 'path';
+
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
+
+// ─── Redis Pub/Sub Adapter (optional, for horizontal scaling) ────────
+// When REDIS_URL is set, Socket.io events are shared across all server
+// instances via Redis Pub/Sub — required for multi-pod deployments.
+async function trySetupRedisAdapter(io: Server): Promise<void> {
+    if (!process.env.REDIS_URL) {
+        console.log('[WS] REDIS_URL not set — using in-memory adapter (single server only)');
+        return;
+    }
+
+    try {
+        const { createAdapter } = await import('@socket.io/redis-adapter');
+        const { default: Redis } = await import('ioredis');
+        const pubClient = new Redis(process.env.REDIS_URL);
+        const subClient = pubClient.duplicate();
+        io.adapter(createAdapter(pubClient, subClient));
+        console.log('[WS] Redis Pub/Sub adapter enabled for horizontal scaling');
+    } catch (err) {
+        console.error('[WS] Failed to set up Redis adapter — falling back to in-memory:', err);
+    }
+}
 
 // ─── Firebase Admin Initialization ──────────────────────────────────
 if (!admin.apps.length) {
@@ -188,6 +209,7 @@ app.get('/health', (_req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
+    await trySetupRedisAdapter(io);
     console.log(`WebSocket server running on port ${PORT}`);
 });

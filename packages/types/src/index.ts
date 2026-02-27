@@ -23,7 +23,7 @@ export const createOrgSchema = z.object({
 });
 
 export const updateOrgSchema = z.object({
-    id: z.string().uuid(),
+    orgId: z.string().uuid(),
     name: z.string().min(2).max(100).optional(),
     slug: z
         .string()

@@ -36,21 +36,21 @@ export default async function MarketingLayout({
                         </Link>
                         {session ? (
                             <Link
-                                href="/dashboard"
+                                href="/onboarding"
                                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg gradient-primary text-white text-sm font-medium hover:opacity-90 transition-opacity"
                             >
-                                Go to Dashboard <ArrowRight className="w-4 h-4" />
+                                Go to App <ArrowRight className="w-4 h-4" />
                             </Link>
                         ) : (
                             <>
                                 <Link
-                                    href="/login"
+                                    href="/auth/login"
                                     className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                                 >
                                     Sign In
                                 </Link>
                                 <Link
-                                    href="/register"
+                                    href="/auth/register"
                                     className="inline-flex items-center gap-2 px-4 py-2 rounded-lg gradient-primary text-white text-sm font-medium hover:opacity-90 transition-opacity"
                                 >
                                     Get Started <ArrowRight className="w-4 h-4" />

@@ -1,4 +1,5 @@
 import { router, publicProcedure, protectedProcedure, createOrgProcedure } from './trpc';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import {
     organizations,
@@ -18,6 +19,7 @@ import {
     notifications,
     subscriptions,
     users,
+    userSettings,
 } from '@flowdesk/db';
 import {
     createOrgSchema,
@@ -47,6 +49,54 @@ import { randomUUID } from 'crypto';
 import { billingRouter } from './routers/billing';
 import { checkMemberLimit, checkProjectLimit } from './lib/plan-limits';
 import { sendInviteEmail } from './lib/email';
+
+// ─── Activity Logging Helper ─────────────────────────────────────────
+async function logActivity(
+    db: any,
+    data: {
+        orgId: string;
+        userId: string;
+        action: string;
+        taskId?: string | null;
+        projectId?: string | null;
+        documentId?: string | null;
+        metadata?: Record<string, any>;
+    }
+) {
+    await db.insert(activityLog).values({
+        orgId: data.orgId,
+        userId: data.userId,
+        action: data.action,
+        taskId: data.taskId || null,
+        projectId: data.projectId || null,
+        documentId: data.documentId || null,
+        metadata: data.metadata || null,
+    });
+}
+
+// ─── Notification Helper ────────────────────────────────────────────
+async function createNotification(
+    db: any,
+    broadcast: any,
+    data: {
+        userId: string;
+        orgId: string;
+        type: string;
+        title: string;
+        body?: string;
+        payload?: Record<string, any>;
+    }
+) {
+    const [notification] = await db
+        .insert(notifications)
+        .values(data)
+        .returning();
+
+    // Broadcast to user
+    await broadcast('NOTIFICATION', notification, `user:${data.userId}`);
+
+    return notification;
+}
 
 // ─── Organization Router ────────────────────────────────────────────
 export const orgRouter = router({
@@ -101,17 +151,27 @@ export const orgRouter = router({
             });
 
             if (!org) throw new Error('Organization not found');
+            
+            // Verify user is a member of this organization
+            const isMember = org.members.some((m: any) => m.userId === ctx.user.id);
+            if (!isMember) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'You are not a member of this organization',
+                });
+            }
+            
             return org;
         }),
 
     update: createOrgProcedure('ADMIN')
         .input(updateOrgSchema)
         .mutation(async ({ ctx, input }) => {
-            const { id, ...data } = input;
+            const { orgId, ...data } = input;
             const [updated] = await ctx.db
                 .update(organizations)
                 .set({ ...data, updatedAt: new Date() })
-                .where(eq(organizations.id, id))
+                .where(eq(organizations.id, orgId))
                 .returning();
             return updated;
         }),
@@ -240,6 +300,53 @@ export const membersRouter = router({
 
             return { success: true, orgId: invitation.orgId };
         }),
+
+    listInvitations: createOrgProcedure()
+        .input(z.object({ orgId: z.string().uuid() }))
+        .query(async ({ ctx, input }) => {
+            return ctx.db.query.invitations.findMany({
+                where: eq(invitations.orgId, input.orgId),
+                orderBy: [desc(invitations.createdAt)],
+            });
+        }),
+
+    resendInvite: createOrgProcedure('ADMIN')
+        .input(z.object({ orgId: z.string().uuid(), id: z.string().uuid() }))
+        .mutation(async ({ ctx, input }) => {
+            const invitation = await ctx.db.query.invitations.findFirst({
+                where: eq(invitations.id, input.id),
+            });
+
+            if (!invitation) throw new Error('Invitation not found');
+
+            // Update expiration
+            const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+            await ctx.db
+                .update(invitations)
+                .set({ expiresAt })
+                .where(eq(invitations.id, input.id));
+
+            // Resend email
+            const org = await ctx.db.query.organizations.findFirst({
+                where: (o, { eq }) => eq(o.id, input.orgId),
+            });
+            const inviterName = ctx.user.name || ctx.user.email || 'A teammate';
+            sendInviteEmail({
+                to: invitation.email,
+                inviterName,
+                orgName: org?.name || 'your organization',
+                inviteToken: invitation.token,
+            }).catch((err) => console.error('[Email] Failed to resend invite:', err));
+
+            return { success: true };
+        }),
+
+    cancelInvite: createOrgProcedure('ADMIN')
+        .input(z.object({ orgId: z.string().uuid(), id: z.string().uuid() }))
+        .mutation(async ({ ctx, input }) => {
+            await ctx.db.delete(invitations).where(eq(invitations.id, input.id));
+            return { success: true };
+        }),
 });
 
 // ─── Workspace Router ────────────────────────────────────────────────
@@ -311,6 +418,16 @@ export const projectRouter = router({
                     createdBy: ctx.user.id,
                 })
                 .returning();
+
+            // Log activity
+            await logActivity(ctx.db, {
+                orgId: ctx.orgId!,
+                userId: ctx.user.id,
+                action: 'PROJECT_CREATED',
+                projectId: project.id,
+                metadata: { name: project.name, status: project.status },
+            });
+
             return project;
         }),
 
@@ -350,18 +467,58 @@ export const projectRouter = router({
         .input(updateProjectSchema)
         .mutation(async ({ ctx, input }) => {
             const { id, ...data } = input;
+
+            const [currentProject] = await ctx.db
+                .select()
+                .from(projects)
+                .where(eq(projects.id, id));
+
             const [updated] = await ctx.db
                 .update(projects)
                 .set({ ...data, updatedAt: new Date() })
                 .where(eq(projects.id, id))
                 .returning();
+
+            // Log activity for status change
+            if (data.status && data.status !== currentProject?.status) {
+                await logActivity(ctx.db, {
+                    orgId: ctx.orgId!,
+                    userId: ctx.user.id,
+                    action: 'PROJECT_STATUS_CHANGED',
+                    projectId: updated.id,
+                    metadata: {
+                        from: currentProject?.status,
+                        to: updated.status,
+                        name: updated.name
+                    },
+                });
+            }
+
             return updated;
         }),
 
     delete: createOrgProcedure('ADMIN')
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
+            // Get project info before deletion
+            const [deletedProject] = await ctx.db
+                .select()
+                .from(projects)
+                .where(eq(projects.id, input.id));
+
             await ctx.db.delete(projects).where(eq(projects.id, input.id));
+
+            // Log activity
+            if (deletedProject) {
+                await logActivity(ctx.db, {
+                    orgId: ctx.orgId!,
+                    userId: ctx.user.id,
+                    action: 'PROJECT_DELETED',
+                    projectId: input.id,
+                    metadata: { name: deletedProject.name },
+                });
+            }
+
             return { success: true };
         }),
 });
@@ -392,20 +549,26 @@ export const taskRouter = router({
                 })
                 .returning();
 
+            // Log activity
+            await logActivity(ctx.db, {
+                orgId: ctx.orgId!,
+                userId: ctx.user.id,
+                action: 'TASK_CREATED',
+                taskId: task.id,
+                projectId: task.projectId,
+                metadata: { title: task.title, status: task.status },
+            });
+
+            // Notify assignee
             if (input.assigneeId && input.assigneeId !== ctx.user.id) {
-                const notification = {
+                await createNotification(ctx.db, broadcast, {
                     userId: input.assigneeId,
                     orgId: ctx.orgId!,
                     type: 'TASK_ASSIGNED',
                     title: 'New Task Assigned',
                     body: `You have been assigned to task "${task.title}"`,
                     payload: { taskId: task.id, projectId: task.projectId },
-                };
-
-                await ctx.db.insert(notifications).values(notification as any);
-
-                // Broadcast
-                await broadcast('NOTIFICATION', notification, `user:${input.assigneeId}`);
+                });
             }
 
             return task;
@@ -466,25 +629,52 @@ export const taskRouter = router({
                 .where(eq(tasks.id, id))
                 .returning();
 
+            // Log activity for status change
+            if (data.status && data.status !== currentTask?.status) {
+                await logActivity(ctx.db, {
+                    orgId: ctx.orgId!,
+                    userId: ctx.user.id,
+                    action: 'TASK_STATUS_CHANGED',
+                    taskId: updated.id,
+                    projectId: updated.projectId,
+                    metadata: {
+                        from: currentTask?.status,
+                        to: updated.status,
+                        title: updated.title
+                    },
+                });
+            }
+
+            // Log activity for assignee change
+            if (data.assigneeId && data.assigneeId !== currentTask?.assigneeId) {
+                await logActivity(ctx.db, {
+                    orgId: ctx.orgId!,
+                    userId: ctx.user.id,
+                    action: 'TASK_ASSIGNEE_CHANGED',
+                    taskId: updated.id,
+                    projectId: updated.projectId,
+                    metadata: {
+                        from: currentTask?.assigneeId,
+                        to: updated.assigneeId,
+                        title: updated.title
+                    },
+                });
+            }
+
             // Notify on reassignment
             if (
                 input.assigneeId &&
                 input.assigneeId !== ctx.user.id &&
                 input.assigneeId !== currentTask?.assigneeId
             ) {
-                const notification = {
+                await createNotification(ctx.db, broadcast, {
                     userId: input.assigneeId,
                     orgId: ctx.orgId!,
                     type: 'TASK_ASSIGNED',
                     title: 'Task Assigned',
                     body: `You have been assigned to task "${updated.title}"`,
                     payload: { taskId: updated.id, projectId: updated.projectId },
-                };
-
-                await ctx.db.insert(notifications).values(notification as any);
-
-                // Broadcast
-                await broadcast('NOTIFICATION', notification, `user:${input.assigneeId}`);
+                });
             }
 
             // Broadcast task update to org room (for board updates)
@@ -496,6 +686,11 @@ export const taskRouter = router({
     move: createOrgProcedure('MEMBER')
         .input(moveTaskSchema)
         .mutation(async ({ ctx, input }) => {
+            const [currentTask] = await ctx.db
+                .select()
+                .from(tasks)
+                .where(eq(tasks.id, input.id));
+
             const [moved] = await ctx.db
                 .update(tasks)
                 .set({
@@ -506,6 +701,21 @@ export const taskRouter = router({
                 })
                 .where(eq(tasks.id, input.id))
                 .returning();
+
+            // Log activity
+            await logActivity(ctx.db, {
+                orgId: ctx.orgId!,
+                userId: ctx.user.id,
+                action: 'TASK_MOVED',
+                taskId: moved.id,
+                projectId: moved.projectId,
+                metadata: {
+                    from: currentTask?.status,
+                    to: moved.status,
+                    title: moved.title
+                },
+            });
+
             return moved;
         }),
 
@@ -531,7 +741,26 @@ export const taskRouter = router({
     delete: createOrgProcedure('MEMBER')
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
+            // Get task info before deletion
+            const [deletedTask] = await ctx.db
+                .select()
+                .from(tasks)
+                .where(eq(tasks.id, input.id));
+
             await ctx.db.delete(tasks).where(eq(tasks.id, input.id));
+
+            // Log activity
+            if (deletedTask) {
+                await logActivity(ctx.db, {
+                    orgId: ctx.orgId!,
+                    userId: ctx.user.id,
+                    action: 'TASK_DELETED',
+                    taskId: input.id,
+                    projectId: deletedTask.projectId,
+                    metadata: { title: deletedTask.title },
+                });
+            }
+
             return { success: true };
         }),
 });
@@ -560,32 +789,34 @@ export const commentRouter = router({
                 })
                 .returning();
 
-            // Notify assignee
+            // Get task for notification and activity logging
             const task = await ctx.db.query.tasks.findFirst({
                 where: eq(tasks.id, input.taskId),
             });
 
+            // Log activity
+            if (task) {
+                await logActivity(ctx.db, {
+                    orgId: ctx.orgId!,
+                    userId: ctx.user.id,
+                    action: 'COMMENT_ADDED',
+                    taskId: task.id,
+                    projectId: task.projectId,
+                    metadata: { commentId: comment.id, taskId: task.id },
+                });
+            }
+
+            // Notify assignee
             if (task && task.assigneeId && task.assigneeId !== ctx.user.id) {
-                const notification = {
+                await createNotification(ctx.db, broadcast, {
                     userId: task.assigneeId,
                     orgId: ctx.orgId!,
                     type: 'COMMENT_ADDED',
                     title: 'New Comment',
                     body: `New comment on task "${task.title}"`,
                     payload: { taskId: task.id, projectId: task.projectId, commentId: comment.id },
-                };
-
-                await ctx.db.insert(notifications).values(notification as any);
-
-                // Broadcast notification
-                await broadcast('NOTIFICATION', notification, `user:${task.assigneeId}`);
+                });
             }
-
-            // Broadcast comment event to org or task room (task room not joined yet, so org)
-            // Or better: task:taskId. Client needs to join task room?
-            // For now, broadcast to org so board/panels update?
-            // Or specifically for comments, we might want real-time chat feel.
-            // Let's stick to simple notification broadcast for MVP.
 
             return comment;
         }),
@@ -603,9 +834,27 @@ export const commentRouter = router({
     delete: protectedProcedure
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
+            // Get comment before deletion for activity logging
+            const [deletedComment] = await ctx.db
+                .select()
+                .from(comments)
+                .where(and(eq(comments.id, input.id), eq(comments.userId, ctx.user.id)));
+
             await ctx.db
                 .delete(comments)
                 .where(and(eq(comments.id, input.id), eq(comments.userId, ctx.user.id)));
+
+            // Log activity
+            if (deletedComment) {
+                await logActivity(ctx.db, {
+                    orgId: ctx.orgId!,
+                    userId: ctx.user.id,
+                    action: 'COMMENT_DELETED',
+                    taskId: deletedComment.taskId,
+                    metadata: { commentId: input.id },
+                });
+            }
+
             return { success: true };
         }),
 });
@@ -642,6 +891,16 @@ export const documentRouter = router({
                     createdBy: ctx.user.id,
                 })
                 .returning();
+
+            // Log activity
+            await logActivity(ctx.db, {
+                orgId: ctx.orgId!,
+                userId: ctx.user.id,
+                action: 'DOCUMENT_CREATED',
+                documentId: doc.id,
+                metadata: { title: doc.title, workspaceId: doc.workspaceId },
+            });
+
             return doc;
         }),
 
@@ -681,13 +940,45 @@ export const documentRouter = router({
                 .set({ ...data, updatedAt: new Date() })
                 .where(eq(documents.id, id))
                 .returning();
+
+            // Log activity
+            await logActivity(ctx.db, {
+                orgId: ctx.orgId!,
+                userId: ctx.user.id,
+                action: 'DOCUMENT_UPDATED',
+                documentId: updated.id,
+                metadata: {
+                    title: updated.title,
+                    version: nextVersionNumber,
+                    changeNote
+                },
+            });
+
             return updated;
         }),
 
     delete: createOrgProcedure('ADMIN')
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
+            // Get document info before deletion
+            const [deletedDoc] = await ctx.db
+                .select()
+                .from(documents)
+                .where(eq(documents.id, input.id));
+
             await ctx.db.delete(documents).where(eq(documents.id, input.id));
+
+            // Log activity
+            if (deletedDoc) {
+                await logActivity(ctx.db, {
+                    orgId: ctx.orgId!,
+                    userId: ctx.user.id,
+                    action: 'DOCUMENT_DELETED',
+                    documentId: input.id,
+                    metadata: { title: deletedDoc.title },
+                });
+            }
+
             return { success: true };
         }),
 
@@ -808,6 +1099,20 @@ export const documentRouter = router({
                     userId: ctx.user.id,
                 })
                 .returning();
+
+            // Log activity
+            await logActivity(ctx.db, {
+                orgId: ctx.orgId!,
+                userId: ctx.user.id,
+                action: input.parentId ? 'DOCUMENT_COMMENT_REPLY' : 'DOCUMENT_COMMENT_ADDED',
+                documentId: input.documentId,
+                metadata: {
+                    commentId: comment.id,
+                    documentId: input.documentId,
+                    parentId: input.parentId
+                },
+            });
+
             return comment;
         }),
 
@@ -815,6 +1120,12 @@ export const documentRouter = router({
         .input(updateDocumentCommentSchema)
         .mutation(async ({ ctx, input }) => {
             const { id, content, resolved, ...rest } = input;
+
+            // Get current comment for activity logging
+            const [currentComment] = await ctx.db
+                .select()
+                .from(documentComments)
+                .where(eq(documentComments.id, id));
 
             const updateData: Record<string, any> = { ...rest };
             if (content !== undefined) updateData.content = content;
@@ -833,13 +1144,43 @@ export const documentRouter = router({
                 .set({ ...updateData, updatedAt: new Date() })
                 .where(eq(documentComments.id, id))
                 .returning();
+
+            // Log activity for comment resolution
+            if (resolved !== undefined && currentComment) {
+                await logActivity(ctx.db, {
+                    orgId: ctx.orgId!,
+                    userId: ctx.user.id,
+                    action: resolved ? 'DOCUMENT_COMMENT_RESOLVED' : 'DOCUMENT_COMMENT_REOPENED',
+                    documentId: currentComment.documentId,
+                    metadata: { commentId: id, documentId: currentComment.documentId },
+                });
+            }
+
             return updated;
         }),
 
     deleteComment: createOrgProcedure('MEMBER')
         .input(z.object({ orgId: z.string().uuid(), id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
+            // Get comment before deletion for activity logging
+            const [deletedComment] = await ctx.db
+                .select()
+                .from(documentComments)
+                .where(eq(documentComments.id, input.id));
+
             await ctx.db.delete(documentComments).where(eq(documentComments.id, input.id));
+
+            // Log activity
+            if (deletedComment) {
+                await logActivity(ctx.db, {
+                    orgId: ctx.orgId!,
+                    userId: ctx.user.id,
+                    action: 'DOCUMENT_COMMENT_DELETED',
+                    documentId: deletedComment.documentId,
+                    metadata: { commentId: input.id, documentId: deletedComment.documentId },
+                });
+            }
+
             return { success: true };
         }),
 });
@@ -891,6 +1232,15 @@ export const notificationRouter = router({
             await ctx.db.update(notifications).set({ readAt: new Date() }).where(and(...conditions));
             return { success: true };
         }),
+
+    delete: protectedProcedure
+        .input(z.object({ id: z.string().uuid() }))
+        .mutation(async ({ ctx, input }) => {
+            await ctx.db
+                .delete(notifications)
+                .where(and(eq(notifications.id, input.id), eq(notifications.userId, ctx.user.id)));
+            return { success: true };
+        }),
 });
 
 // ─── Activity Router ────────────────────────────────────────────────
@@ -902,18 +1252,55 @@ export const activityRouter = router({
             userId: z.string().uuid().optional(),
             action: z.string().optional(),
             projectId: z.string().uuid().optional(),
+            taskId: z.string().uuid().optional(),
+            documentId: z.string().uuid().optional(),
         }))
         .query(async ({ ctx, input }) => {
             const conditions = [eq(activityLog.orgId, input.orgId)];
             if (input.userId) conditions.push(eq(activityLog.userId, input.userId));
             if (input.action) conditions.push(eq(activityLog.action, input.action));
             if (input.projectId) conditions.push(eq(activityLog.projectId, input.projectId));
+            if (input.taskId) conditions.push(eq(activityLog.taskId, input.taskId));
+            if (input.documentId) conditions.push(eq(activityLog.documentId, input.documentId));
 
             return ctx.db.query.activityLog.findMany({
                 where: and(...conditions),
-                with: { user: true, project: true },
+                with: { user: true, project: true, task: true, document: true },
                 orderBy: [desc(activityLog.createdAt)],
                 limit: input.limit || 50,
+            });
+        }),
+
+    getByTask: protectedProcedure
+        .input(z.object({ orgId: z.string().uuid(), taskId: z.string().uuid() }))
+        .query(async ({ ctx, input }) => {
+            return ctx.db.query.activityLog.findMany({
+                where: and(eq(activityLog.orgId, input.orgId), eq(activityLog.taskId, input.taskId)),
+                with: { user: true, task: true },
+                orderBy: [desc(activityLog.createdAt)],
+                limit: 50,
+            });
+        }),
+
+    getByProject: protectedProcedure
+        .input(z.object({ orgId: z.string().uuid(), projectId: z.string().uuid() }))
+        .query(async ({ ctx, input }) => {
+            return ctx.db.query.activityLog.findMany({
+                where: and(eq(activityLog.orgId, input.orgId), eq(activityLog.projectId, input.projectId)),
+                with: { user: true, task: true },
+                orderBy: [desc(activityLog.createdAt)],
+                limit: 50,
+            });
+        }),
+
+    getByDocument: protectedProcedure
+        .input(z.object({ orgId: z.string().uuid(), documentId: z.string().uuid() }))
+        .query(async ({ ctx, input }) => {
+            return ctx.db.query.activityLog.findMany({
+                where: and(eq(activityLog.orgId, input.orgId), eq(activityLog.documentId, input.documentId)),
+                with: { user: true },
+                orderBy: [desc(activityLog.createdAt)],
+                limit: 50,
             });
         }),
 });
@@ -1012,6 +1399,65 @@ export const attachmentRouter = router({
 
 // ─── Analytics Router ───────────────────────────────────────────────
 export const analyticsRouter = router({
+    getDashboardStats: createOrgProcedure()
+        .input(z.object({ orgId: z.string().uuid(), days: z.number().int().min(7).max(90).optional() }))
+        .query(async ({ ctx, input }) => {
+            const days = input.days || 30;
+            const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+            // Task status distribution
+            const taskStatusDistribution = await ctx.db
+                .select({
+                    status: tasks.status,
+                    count: sql<number>`count(*)::int`,
+                })
+                .from(tasks)
+                .where(eq(tasks.orgId, input.orgId))
+                .groupBy(tasks.status);
+
+            // Tasks created per day
+            const tasksCreatedPerDay = await ctx.db
+                .select({
+                    date: sql<string>`date_trunc('day', ${tasks.createdAt})`,
+                    count: sql<number>`count(*)::int`,
+                })
+                .from(tasks)
+                .where(
+                    and(
+                        eq(tasks.orgId, input.orgId),
+                        gte(tasks.createdAt, since)
+                    )
+                )
+                .groupBy(sql`date_trunc('day', ${tasks.createdAt})`)
+                .orderBy(sql`date_trunc('day', ${tasks.createdAt})`);
+
+            // Activity by user
+            const activityByUser = await ctx.db
+                .select({
+                    userId: activityLog.userId,
+                    userName: users.name,
+                    userEmail: users.email,
+                    activityCount: sql<number>`count(*)::int`,
+                })
+                .from(activityLog)
+                .innerJoin(users, eq(users.id, activityLog.userId))
+                .where(
+                    and(
+                        eq(activityLog.orgId, input.orgId),
+                        gte(activityLog.createdAt, since)
+                    )
+                )
+                .groupBy(users.id, users.name, users.email, activityLog.userId)
+                .orderBy(sql`count(*) DESC`)
+                .limit(10);
+
+            return {
+                taskStatusDistribution,
+                tasksCreatedPerDay,
+                activityByUser,
+            };
+        }),
+
     getVelocity: createOrgProcedure()
         .input(z.object({ orgId: z.string().uuid(), days: z.number().int().min(7).max(90).optional() }))
         .query(async ({ ctx, input }) => {
@@ -1146,6 +1592,93 @@ export const searchRouter = router({
         }),
 });
 
+// ─── User Router ────────────────────────────────────────────────
+export const userRouter = router({
+    getProfile: protectedProcedure.query(async ({ ctx }) => {
+        const user = await ctx.db.query.users.findFirst({
+            where: eq(users.id, ctx.user.id),
+        });
+        if (!user) throw new Error('User not found');
+        return user;
+    }),
+
+    updateProfile: protectedProcedure
+        .input(z.object({
+            name: z.string().min(1).max(255).optional(),
+            email: z.string().email().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+            const updateData: Record<string, string> = {};
+            if (input.name) updateData.name = input.name;
+            if (input.email) updateData.email = input.email;
+
+            if (Object.keys(updateData).length === 0) {
+                throw new Error('No fields to update');
+            }
+
+            const [updated] = await ctx.db
+                .update(users)
+                .set({ ...updateData, updatedAt: new Date() })
+                .where(eq(users.id, ctx.user.id))
+                .returning();
+            return updated;
+        }),
+
+    getNotificationSettings: protectedProcedure.query(async ({ ctx }) => {
+        const settings = await ctx.db.query.userSettings.findFirst({
+            where: eq(userSettings.userId, ctx.user.id),
+        });
+
+        // Return default settings if none exist
+        if (!settings) {
+            return {
+                emailNotifications: true,
+                taskAssignments: true,
+                taskUpdates: true,
+                comments: true,
+                mentions: true,
+                dueSoon: true,
+            };
+        }
+
+        return settings;
+    }),
+
+    updateNotificationSettings: protectedProcedure
+        .input(z.object({
+            emailNotifications: z.boolean().optional(),
+            taskAssignments: z.boolean().optional(),
+            taskUpdates: z.boolean().optional(),
+            comments: z.boolean().optional(),
+            mentions: z.boolean().optional(),
+            dueSoon: z.boolean().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+            const updateData: Record<string, boolean> = {};
+            if (input.emailNotifications !== undefined) updateData.emailNotifications = input.emailNotifications;
+            if (input.taskAssignments !== undefined) updateData.taskAssignments = input.taskAssignments;
+            if (input.taskUpdates !== undefined) updateData.taskUpdates = input.taskUpdates;
+            if (input.comments !== undefined) updateData.comments = input.comments;
+            if (input.mentions !== undefined) updateData.mentions = input.mentions;
+            if (input.dueSoon !== undefined) updateData.dueSoon = input.dueSoon;
+
+            // Upsert: insert or update
+            await ctx.db
+                .insert(userSettings)
+                .values({
+                    userId: ctx.user.id,
+                    ...updateData,
+                    updatedAt: new Date(),
+                })
+                .onConflictDoUpdate({
+                    target: userSettings.userId,
+                    set: { ...updateData, updatedAt: new Date() },
+                });
+
+            return { success: true };
+        }),
+});
+
 // ─── App Router (combines all) ──────────────────────────────────────
 export const appRouter = router({
     org: orgRouter,
@@ -1162,6 +1695,7 @@ export const appRouter = router({
     attachment: attachmentRouter,
     analytics: analyticsRouter,
     search: searchRouter,
+    user: userRouter,
 });
 
 export type AppRouter = typeof appRouter;

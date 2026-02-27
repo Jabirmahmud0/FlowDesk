@@ -12,12 +12,16 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 // import { format } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Edit, Trash2, Calendar, User } from 'lucide-react';
+import { Edit, Trash2, Calendar, User, Activity } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { useWorkspace } from '@/hooks/use-workspace';
 
 import { useOrg } from '@/hooks/use-org';
 import { CommentSection } from './comment-section';
+import { ActivityLogPanel } from '@/components/activity';
+import { AttachmentPanel } from './attachment-panel';
+import { useState } from 'react';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 type Props = {
     open: boolean;
@@ -36,6 +40,7 @@ const priorityColors = {
 export function TaskDetailPanel({ open, onOpenChange, task, onEdit }: Props) {
     const { org } = useOrg();
     const utils = trpc.useUtils();
+    const [showActivity, setShowActivity] = useState(false);
 
     // In a real app, we might fetch fresh task details here if the prop is partial.
     // For now, assume task prop has what we need.
@@ -46,16 +51,43 @@ export function TaskDetailPanel({ open, onOpenChange, task, onEdit }: Props) {
 
     const assignee = org?.members.find((m: any) => m.userId === task.assigneeId)?.user;
 
+    if (showActivity && task) {
+        return (
+            <Sheet open={open} onOpenChange={(open) => {
+                onOpenChange(open);
+                if (!open) setShowActivity(false);
+            }}>
+                <SheetContent className="sm:max-w-xl w-[90vw] p-0">
+                    <ActivityLogPanel
+                        orgId={org?.id!}
+                        taskId={task.id}
+                        onClose={() => setShowActivity(false)}
+                    />
+                </SheetContent>
+            </Sheet>
+        );
+    }
+
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent className="sm:max-w-xl w-[90vw] overflow-y-auto">
                 <SheetHeader className="mb-6">
                     <div className="flex items-start justify-between gap-4">
                         <SheetTitle className="text-xl font-bold">{task.title}</SheetTitle>
-                        <Button variant="outline" size="sm" onClick={() => onEdit(task)}>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setShowActivity(true)}
+                                title="View Activity"
+                            >
+                                <Activity className="h-4 w-4" />
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => onEdit(task)}>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit
+                            </Button>
+                        </div>
                     </div>
                     <div className="flex items-center gap-2 mt-2">
                         <Badge variant="outline" className="text-xs">
@@ -107,6 +139,11 @@ export function TaskDetailPanel({ open, onOpenChange, task, onEdit }: Props) {
                             </span>
                         </div>
                     </div>
+
+                    <Separator />
+
+                    {/* Attachments */}
+                    <AttachmentPanel taskId={task.id} />
 
                     <Separator />
 

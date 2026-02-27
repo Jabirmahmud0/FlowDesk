@@ -4,6 +4,7 @@ import { TRPCProvider } from '@/components/providers/trpc-provider';
 import { SessionProvider } from '@/components/providers/session-provider';
 import { SocketProvider } from '@/components/providers/socket-provider';
 import { Toaster } from '@/components/ui/toaster';
+import { FloatingThemeToggle } from '@/components/ui/floating-theme-toggle';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                         <TRPCProvider>
                             <SocketProvider>{children}</SocketProvider>
                             <Toaster />
+                            <FloatingThemeToggle />
                         </TRPCProvider>
                     </SessionProvider>
                 </ThemeProvider>
