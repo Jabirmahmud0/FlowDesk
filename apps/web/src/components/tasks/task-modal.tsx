@@ -51,8 +51,12 @@ export function TaskModal({ open, onOpenChange, task, projectId }: Props) {
     const { workspace } = useWorkspace();
     const utils = trpc.useUtils();
 
+    const formSchema = createTaskSchema.omit({ orgId: true }).extend({
+        dueDate: z.date().optional().nullable(),
+    });
+
     const form = useForm({
-        resolver: zodResolver(createTaskSchema.omit({ orgId: true })),
+        resolver: zodResolver(formSchema),
         defaultValues: {
             projectId,
             title: task?.title || '',
@@ -82,10 +86,17 @@ export function TaskModal({ open, onOpenChange, task, projectId }: Props) {
     const isEditing = !!task;
 
     const onSubmit = (data: any) => {
+        if (!org) return;
+
+        const payload = {
+            ...data,
+            dueDate: data.dueDate ? data.dueDate.toISOString() : undefined,
+        };
+
         if (isEditing) {
-            updateMutation.mutate({ id: task.id, ...data });
+            updateMutation.mutate({ id: task.id, ...payload, orgId: org.id });
         } else {
-            createMutation.mutate({ ...data, projectId });
+            createMutation.mutate({ ...payload, projectId, orgId: org.id });
         }
     };
 

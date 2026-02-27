@@ -39,7 +39,9 @@ export function CommentSection({ taskId, projectId }: Props) {
     const handleSubmit = async () => {
         if (!content || content === '<p></p>') return;
         setIsSubmitting(true);
+        if (!org?.id) return;
         createMutation.mutate({
+            orgId: org.id,
             taskId,
             content: content // Sending HTML string
         });

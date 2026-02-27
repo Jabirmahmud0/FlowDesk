@@ -54,6 +54,7 @@ export const updateWorkspaceSchema = z.object({
 
 // ─── Project Schemas ────────────────────────────────────────────────
 export const createProjectSchema = z.object({
+    orgId: z.string().uuid(),
     workspaceId: z.string().uuid(),
     name: z.string().min(1).max(255),
     slug: z
@@ -75,6 +76,7 @@ export const updateProjectSchema = z.object({
 
 // ─── Task Schemas ───────────────────────────────────────────────────
 export const createTaskSchema = z.object({
+    orgId: z.string().uuid(),
     projectId: z.string().uuid(),
     title: z.string().min(1).max(500),
     description: z.any().optional(), // Tiptap JSON
@@ -85,6 +87,7 @@ export const createTaskSchema = z.object({
 });
 
 export const updateTaskSchema = z.object({
+    orgId: z.string().uuid().optional(),
     id: z.string().uuid(),
     title: z.string().min(1).max(500).optional(),
     description: z.any().optional(),
@@ -109,6 +112,7 @@ export const bulkUpdateTasksSchema = z.object({
 
 // ─── Comment Schemas ────────────────────────────────────────────────
 export const createCommentSchema = z.object({
+    orgId: z.string().uuid(),
     taskId: z.string().uuid(),
     content: z.any(), // Tiptap JSON
 });
@@ -127,6 +131,7 @@ export const inviteMemberSchema = z.object({
 
 // ─── Document Schemas ───────────────────────────────────────────────
 export const createDocumentSchema = z.object({
+    orgId: z.string().uuid(),
     workspaceId: z.string().uuid(),
     title: z.string().min(1).max(500),
     content: z.any().optional(),
@@ -135,10 +140,40 @@ export const createDocumentSchema = z.object({
 });
 
 export const updateDocumentSchema = z.object({
+    orgId: z.string().uuid(),
     id: z.string().uuid(),
     title: z.string().min(1).max(500).optional(),
     content: z.any().optional(),
     icon: z.string().max(10).optional(),
+    changeNote: z.string().max(500).optional(),
+});
+
+export const createDocumentVersionSchema = z.object({
+    orgId: z.string().uuid(),
+    documentId: z.string().uuid(),
+    title: z.string().min(1).max(500),
+    content: z.any().optional(),
+    changeNote: z.string().max(500).optional(),
+});
+
+export const restoreDocumentVersionSchema = z.object({
+    orgId: z.string().uuid(),
+    versionId: z.string().uuid(),
+});
+
+// ─── Document Comment Schemas ───────────────────────────────────────
+export const createDocumentCommentSchema = z.object({
+    orgId: z.string().uuid(),
+    documentId: z.string().uuid(),
+    content: z.string().min(1).max(5000),
+    parentId: z.string().uuid().optional().nullable(),
+});
+
+export const updateDocumentCommentSchema = z.object({
+    orgId: z.string().uuid(),
+    id: z.string().uuid(),
+    content: z.string().min(1).max(5000).optional(),
+    resolved: z.boolean().optional(),
 });
 
 // ─── Role Types ─────────────────────────────────────────────────────

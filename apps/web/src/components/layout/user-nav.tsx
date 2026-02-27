@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { signOut, useSession } from 'next-auth/react';
 
-export function UserNav() {
+export function UserNav({ collapsed }: { collapsed?: boolean }) {
     const { data: session } = useSession();
     const user = session?.user;
 
@@ -23,17 +23,26 @@ export function UserNav() {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-full justify-start pl-0 hover:bg-transparent">
-                    <Avatar className="h-9 w-9 mr-3">
+                <Button
+                    variant="ghost"
+                    className={
+                        collapsed
+                            ? 'relative h-10 w-10 rounded-full p-0'
+                            : 'relative h-10 w-full justify-start pl-0 hover:bg-transparent'
+                    }
+                >
+                    <Avatar className={collapsed ? 'h-8 w-8' : 'h-9 w-9 mr-3'}>
                         <AvatarImage src={user.image || ''} alt={user.name || ''} />
                         <AvatarFallback>{user.name?.slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
-                    <div className="flex flex-col space-y-1 text-left">
-                        <p className="text-sm font-medium leading-none">{user.name}</p>
-                        <p className="text-xs leading-none text-muted-foreground truncate w-[160px]">
-                            {user.email}
-                        </p>
-                    </div>
+                    {!collapsed && (
+                        <div className="flex flex-col space-y-1 text-left">
+                            <p className="text-sm font-medium leading-none">{user.name}</p>
+                            <p className="text-xs leading-none text-muted-foreground truncate w-[160px]">
+                                {user.email}
+                            </p>
+                        </div>
+                    )}
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="end" forceMount>

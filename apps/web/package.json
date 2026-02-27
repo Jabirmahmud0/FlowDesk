@@ -7,9 +7,13 @@
         "build": "next build",
         "start": "next start",
         "lint": "next lint",
-        "seed:firebase": "tsx scripts/seed-firebase.ts",
+        "seed:firebase": "npx --yes tsx scripts/seed-firebase.ts",
+        "verify:db": "npx --yes tsx verify-db.ts",
         "reset:admin": "node scripts/reset-admin.js",
-        "type-check": "tsc --noEmit"
+        "type-check": "tsc --noEmit",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:coverage": "vitest run --coverage"
     },
     "dependencies": {
         "@auth/drizzle-adapter": "^1.7.0",
@@ -29,12 +33,13 @@
         "@radix-ui/react-separator": "^1.1.0",
         "@radix-ui/react-slot": "^1.1.0",
         "@radix-ui/react-tabs": "^1.1.0",
+        "@radix-ui/react-toast": "^1.2.0",
         "@radix-ui/react-toggle": "^1.1.10",
         "@radix-ui/react-tooltip": "^1.1.0",
         "@tanstack/react-query": "^5.65.0",
-        "@tiptap/extension-placeholder": "^3.19.0",
-        "@tiptap/react": "^3.19.0",
-        "@tiptap/starter-kit": "^3.19.0",
+        "@tiptap/extension-placeholder": "^3.20.0",
+        "@tiptap/react": "^3.20.0",
+        "@tiptap/starter-kit": "^3.20.0",
         "@trpc/client": "^11.0.0",
         "@trpc/next": "^11.0.0",
         "@trpc/react-query": "^11.0.0",
@@ -60,6 +65,7 @@
         "zustand": "^5.0.0"
     },
     "devDependencies": {
+        "@sentry/nextjs": "^10.39.0",
         "@tailwindcss/postcss": "^4.0.0",
         "@types/bcryptjs": "^2.4.0",
         "@types/node": "^22.0.0",
@@ -68,6 +74,7 @@
         "autoprefixer": "^10.4.0",
         "postcss": "^8.5.0",
         "tailwindcss": "^4.0.0",
-        "typescript": "^5.7.0"
+        "typescript": "^5.7.0",
+        "vitest": "^4.0.18"
     }
 }

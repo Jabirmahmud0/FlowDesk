@@ -331,6 +331,34 @@ export const comments = pgTable(
     })
 );
 
+// ─── 14b. Document Comments ─────────────────────────────────────────
+export const documentComments = pgTable(
+    'document_comments',
+    {
+        id: uuid('id').defaultRandom().primaryKey(),
+        documentId: uuid('document_id')
+            .notNull()
+            .references(() => documents.id, { onDelete: 'cascade' }),
+        orgId: uuid('org_id')
+            .notNull()
+            .references(() => organizations.id, { onDelete: 'cascade' }),
+        userId: uuid('user_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        parentId: uuid('parent_id'), // for threaded replies
+        content: text('content').notNull(),
+        resolvedAt: timestamp('resolved_at', { mode: 'date' }),
+        resolvedBy: uuid('resolved_by'),
+        createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+        updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
+    },
+    (table) => ({
+        documentIdIdx: index('document_comments_document_id_idx').on(table.documentId),
+        orgIdIdx: index('document_comments_org_id_idx').on(table.orgId),
+        parentIdIdx: index('document_comments_parent_id_idx').on(table.parentId),
+    })
+);
+
 // ─── 15. Attachments ────────────────────────────────────────────────
 export const attachments = pgTable(
     'attachments',
@@ -403,6 +431,32 @@ export const documents = pgTable(
         workspaceIdx: index('documents_workspace_id_idx').on(table.workspaceId),
         orgIdIdx: index('documents_org_id_idx').on(table.orgId),
         parentIdx: index('documents_parent_id_idx').on(table.parentId),
+    })
+);
+
+// ─── 17b. Document Versions ──────────────────────────────────────────
+export const documentVersions = pgTable(
+    'document_versions',
+    {
+        id: uuid('id').defaultRandom().primaryKey(),
+        documentId: uuid('document_id')
+            .notNull()
+            .references(() => documents.id, { onDelete: 'cascade' }),
+        orgId: uuid('org_id')
+            .notNull()
+            .references(() => organizations.id, { onDelete: 'cascade' }),
+        versionNumber: integer('version_number').notNull(),
+        title: varchar('title', { length: 500 }).notNull(),
+        content: jsonb('content'),
+        createdBy: uuid('created_by')
+            .notNull()
+            .references(() => users.id),
+        createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+        changeNote: varchar('change_note', { length: 500 }),
+    },
+    (table) => ({
+        documentIdIdx: index('document_versions_document_id_idx').on(table.documentId),
+        orgIdIdx: index('document_versions_org_id_idx').on(table.orgId),
     })
 );
 
@@ -545,6 +599,29 @@ export const commentsRelations = relations(comments, ({ one }) => ({
     user: one(users, { fields: [comments.userId], references: [users.id] }),
 }));
 
+export const documentCommentsRelations = relations(documentComments, ({ one, many }) => ({
+    document: one(documents, {
+        fields: [documentComments.documentId],
+        references: [documents.id],
+    }),
+    organization: one(organizations, {
+        fields: [documentComments.orgId],
+        references: [organizations.id],
+    }),
+    user: one(users, {
+        fields: [documentComments.userId],
+        references: [users.id],
+    }),
+    replies: many(documentComments),
+}));
+
+export const documentCommentsParentRelations = relations(documentComments, ({ one }) => ({
+    parent: one(documentComments, {
+        fields: [documentComments.parentId],
+        references: [documentComments.id],
+    }),
+}));
+
 export const attachmentsRelations = relations(attachments, ({ one }) => ({
     task: one(tasks, { fields: [attachments.taskId], references: [tasks.id] }),
     user: one(users, { fields: [attachments.userId], references: [users.id] }),
@@ -560,10 +637,26 @@ export const activityLogRelations = relations(activityLog, ({ one }) => ({
     user: one(users, { fields: [activityLog.userId], references: [users.id] }),
 }));
 
-export const documentsRelations = relations(documents, ({ one }) => ({
+export const documentsRelations = relations(documents, ({ one, many }) => ({
     workspace: one(workspaces, { fields: [documents.workspaceId], references: [workspaces.id] }),
     organization: one(organizations, { fields: [documents.orgId], references: [organizations.id] }),
     creator: one(users, { fields: [documents.createdBy], references: [users.id] }),
+    versions: many(documentVersions),
+}));
+
+export const documentVersionsRelations = relations(documentVersions, ({ one }) => ({
+    document: one(documents, {
+        fields: [documentVersions.documentId],
+        references: [documents.id],
+    }),
+    organization: one(organizations, {
+        fields: [documentVersions.orgId],
+        references: [organizations.id],
+    }),
+    creator: one(users, {
+        fields: [documentVersions.createdBy],
+        references: [users.id],
+    }),
 }));
 
 export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({

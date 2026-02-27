@@ -1,11 +1,24 @@
 
 import express from 'express';
 import http from 'http';
-import { Server } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import admin from 'firebase-admin';
 
-dotenv.config();
+import path from 'path';
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
+
+// ─── Firebase Admin Initialization ──────────────────────────────────
+if (!admin.apps.length) {
+    admin.initializeApp({
+        credential: admin.credential.cert({
+            projectId: process.env.FIREBASE_PROJECT_ID,
+            privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        }),
+    });
+}
 
 const app = express();
 app.use(cors());
@@ -14,32 +27,138 @@ app.use(express.json());
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: '*', // Allow all for MVP
-        methods: ['GET', 'POST']
+        origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
+        methods: ['GET', 'POST'],
+        credentials: true,
+    },
+    pingInterval: 25000,
+    pingTimeout: 10000,
+});
+
+// ─── Presence Tracking ──────────────────────────────────────────────
+const onlineUsers = new Map<string, Set<string>>(); // orgId -> Set<userId>
+
+function addOnlineUser(orgId: string, userId: string) {
+    if (!onlineUsers.has(orgId)) onlineUsers.set(orgId, new Set());
+    onlineUsers.get(orgId)!.add(userId);
+}
+
+function removeOnlineUser(orgId: string, userId: string) {
+    onlineUsers.get(orgId)?.delete(userId);
+    if (onlineUsers.get(orgId)?.size === 0) onlineUsers.delete(orgId);
+}
+
+function getOnlineUsers(orgId: string): string[] {
+    return Array.from(onlineUsers.get(orgId) || []);
+}
+
+// ─── JWT Auth Middleware ─────────────────────────────────────────────
+io.use(async (socket: Socket, next) => {
+    try {
+        const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+
+        if (!token || typeof token !== 'string') {
+            // Allow connection without auth for backward compatibility
+            // but mark as unauthenticated
+            (socket as any).userId = socket.handshake.query?.userId;
+            (socket as any).authenticated = false;
+            return next();
+        }
+
+        const decodedToken = await admin.auth().verifyIdToken(token);
+        (socket as any).userId = decodedToken.uid;
+        (socket as any).email = decodedToken.email;
+        (socket as any).authenticated = true;
+        next();
+    } catch (error) {
+        console.error('Socket auth error:', error);
+        // Still allow connection but mark as unauthenticated
+        (socket as any).userId = socket.handshake.query?.userId;
+        (socket as any).authenticated = false;
+        next();
     }
 });
 
-io.on('connection', (socket) => {
-    console.log('Client connected:', socket.id);
+// ─── Connection Handler ─────────────────────────────────────────────
+io.on('connection', (socket: Socket) => {
+    const userId = (socket as any).userId as string;
+    const authenticated = (socket as any).authenticated as boolean;
+    const orgId = socket.handshake.query?.orgId as string;
+    const wsId = socket.handshake.query?.wsId as string;
 
-    const { userId, orgId } = socket.handshake.query;
+    console.log(`Client connected: ${socket.id} | user: ${userId} | auth: ${authenticated}`);
 
+    // Join user-specific room
     if (userId) {
-        console.log(`User ${userId} joined room user:${userId}`);
         socket.join(`user:${userId}`);
     }
 
+    // Join org room and track presence
     if (orgId) {
-        console.log(`User joined room org:${orgId}`);
         socket.join(`org:${orgId}`);
+        if (userId) {
+            addOnlineUser(orgId, userId);
+            // Broadcast presence update to org
+            io.to(`org:${orgId}`).emit('PRESENCE_UPDATE', {
+                userId,
+                status: 'online',
+                onlineUsers: getOnlineUsers(orgId),
+            });
+        }
     }
 
-    socket.on('disconnect', () => {
-        console.log('Client disconnected:', socket.id);
+    // Join workspace room
+    if (wsId) {
+        socket.join(`ws:${wsId}`);
+    }
+
+    // ─── Event Handlers ─────────────────────────────────────────
+    socket.on('join:room', (room: string) => {
+        socket.join(room);
+        console.log(`${socket.id} joined room: ${room}`);
+    });
+
+    socket.on('leave:room', (room: string) => {
+        socket.leave(room);
+        console.log(`${socket.id} left room: ${room}`);
+    });
+
+    // Typing indicators
+    socket.on('typing:start', (data: { taskId: string; userName: string }) => {
+        socket.to(`task:${data.taskId}`).emit('TYPING_START', {
+            userId,
+            userName: data.userName,
+            taskId: data.taskId,
+        });
+    });
+
+    socket.on('typing:stop', (data: { taskId: string }) => {
+        socket.to(`task:${data.taskId}`).emit('TYPING_STOP', {
+            userId,
+            taskId: data.taskId,
+        });
+    });
+
+    // Heartbeat
+    socket.on('heartbeat', () => {
+        socket.emit('heartbeat:ack', { timestamp: Date.now() });
+    });
+
+    // Disconnect
+    socket.on('disconnect', (reason) => {
+        console.log(`Client disconnected: ${socket.id} | reason: ${reason}`);
+        if (orgId && userId) {
+            removeOnlineUser(orgId, userId);
+            io.to(`org:${orgId}`).emit('PRESENCE_UPDATE', {
+                userId,
+                status: 'offline',
+                onlineUsers: getOnlineUsers(orgId),
+            });
+        }
     });
 });
 
-// Private endpoint for backend to broadcast events
+// ─── Private Broadcast Endpoint ─────────────────────────────────────
 app.post('/broadcast', (req, res) => {
     const { event, data, room } = req.body;
 
@@ -51,6 +170,21 @@ app.post('/broadcast', (req, res) => {
     io.to(room).emit(event, data);
 
     res.json({ success: true });
+});
+
+// ─── Presence API ───────────────────────────────────────────────────
+app.get('/presence/:orgId', (req, res) => {
+    const users = getOnlineUsers(req.params.orgId);
+    res.json({ onlineUsers: users, count: users.length });
+});
+
+// ─── Health Check ───────────────────────────────────────────────────
+app.get('/health', (_req, res) => {
+    res.json({
+        status: 'ok',
+        connections: io.engine.clientsCount,
+        uptime: process.uptime(),
+    });
 });
 
 const PORT = process.env.PORT || 3001;

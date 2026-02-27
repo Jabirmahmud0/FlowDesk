@@ -8,6 +8,6 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 export const stripe = new Stripe(apiKey, {
-    apiVersion: '2024-04-10', // Use latest stable
+    apiVersion: '2026-01-28.clover', // Use latest stable
     typescript: true,
 });

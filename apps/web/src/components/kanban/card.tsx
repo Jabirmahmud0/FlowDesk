@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { Calendar, User } from 'lucide-react';
-// import { format } from 'date-fns';
+import { motion } from 'framer-motion';
 
 type Task = {
     id: string;
@@ -60,32 +60,39 @@ export function TaskCard({ task, onClick }: Props) {
 
     return (
         <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={() => onClick(task)}>
-            <UICard className="cursor-grab hover:border-primary/50 transition-colors mb-2">
-                <CardHeader className="p-3 pb-0 space-y-0">
-                    <div className="flex items-start justify-between gap-2">
-                        <CardTitle className="text-sm font-medium leading-tight">
-                            {task.title}
-                        </CardTitle>
-                    </div>
-                </CardHeader>
-                <CardContent className="p-3">
-                    <div className="flex items-center justify-between mt-2">
-                        <Badge variant="outline" className={cn("text-[10px] px-1 py-0 h-5 font-normal", priorityColors[task.priority] + "/10 text-foreground border-transparent")}>
-                            <div className={cn("w-1.5 h-1.5 rounded-full mr-1", priorityColors[task.priority])} />
-                            {task.priority}
-                        </Badge>
+            <motion.div
+                whileHover={{ scale: 1.02, y: -2 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            >
+                <UICard className="cursor-grab hover:border-primary/50 hover:shadow-md transition-all mb-2">
+                    <CardHeader className="p-3 pb-0 space-y-0">
+                        <div className="flex items-start justify-between gap-2">
+                            <CardTitle className="text-sm font-medium leading-tight">
+                                {task.title}
+                            </CardTitle>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-3">
+                        <div className="flex items-center justify-between mt-2">
+                            <Badge variant="outline" className={cn("text-[10px] px-1 py-0 h-5 font-normal", priorityColors[task.priority] + "/10 text-foreground border-transparent")}>
+                                <div className={cn("w-1.5 h-1.5 rounded-full mr-1", priorityColors[task.priority])} />
+                                {task.priority}
+                            </Badge>
 
-                        {task.assignee && (
-                            <Avatar className="h-5 w-5">
-                                <AvatarImage src={task.assignee.image || ''} />
-                                <AvatarFallback className="text-[9px]">
-                                    {task.assignee.name?.[0]}
-                                </AvatarFallback>
-                            </Avatar>
-                        )}
-                    </div>
-                </CardContent>
-            </UICard>
+                            {task.assignee && (
+                                <Avatar className="h-5 w-5">
+                                    <AvatarImage src={task.assignee.image || ''} />
+                                    <AvatarFallback className="text-[9px]">
+                                        {task.assignee.name?.[0]}
+                                    </AvatarFallback>
+                                </Avatar>
+                            )}
+                        </div>
+                    </CardContent>
+                </UICard>
+            </motion.div>
         </div>
     );
 }
+

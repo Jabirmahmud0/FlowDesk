@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Check, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { useToast } from '@/components/ui/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
+import { cn } from '@/lib/utils';
 
 const PLANS = [
     {
@@ -39,6 +40,7 @@ export default function BillingPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const utils = trpc.useUtils();
+    const { toast } = useToast();
 
     const { data: subscription, isLoading } = trpc.billing.getSubscription.useQuery(
         { orgId: org?.id! },
@@ -50,7 +52,11 @@ export default function BillingPage() {
             if (url) window.location.href = url;
         },
         onError: (err) => {
-            toast.error(err.message);
+            toast({
+                title: 'Error',
+                description: err.message,
+                variant: 'destructive',
+            });
         }
     });
 
@@ -59,21 +65,32 @@ export default function BillingPage() {
             if (url) window.location.href = url;
         },
         onError: (err) => {
-            toast.error(err.message);
+            toast({
+                title: 'Error',
+                description: err.message,
+                variant: 'destructive',
+            });
         }
     });
 
     useEffect(() => {
         if (searchParams?.get('success')) {
-            toast.success('Subscription updated successfully!');
+            toast({
+                title: 'Success',
+                description: 'Subscription updated successfully!',
+            });
             utils.billing.getSubscription.invalidate();
             router.replace(window.location.pathname);
         }
         if (searchParams?.get('canceled')) {
-            toast.error('Subscription update canceled.');
+            toast({
+                title: 'Canceled',
+                description: 'Subscription update canceled.',
+                variant: 'destructive',
+            });
             router.replace(window.location.pathname);
         }
-    }, [searchParams, router, utils]);
+    }, [searchParams, router, utils, toast]);
 
     if (isLoading) {
         return <div className="flex h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -146,12 +163,4 @@ export default function BillingPage() {
             </div>
         </div>
     );
-}
-
-// Utility for cn
-import { ClassValue, clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-function cn(...inputs: ClassValue[]) {
-    return twMerge(clsx(inputs));
 }

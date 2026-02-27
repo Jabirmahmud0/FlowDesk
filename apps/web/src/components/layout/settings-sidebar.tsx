@@ -20,7 +20,7 @@ export function SettingsSidebar({ className, ...props }: SidebarNavProps) {
         },
         {
             title: "Members",
-            href: `/${slug}/settings/members`,
+            href: `/${slug}/members`,
             icon: Users
         },
         {

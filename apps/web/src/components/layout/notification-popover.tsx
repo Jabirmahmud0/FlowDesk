@@ -14,6 +14,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useOrg } from '@/hooks/use-org';
 import { useSocket } from '@/components/providers/socket-provider';
 import { useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export function NotificationPopover() {
     const { org } = useOrg();
@@ -107,41 +108,51 @@ export function NotificationPopover() {
                         </div>
                     ) : (
                         <div className="divide-y">
-                            {notifications?.map((notification) => (
-                                <div
-                                    key={notification.id}
-                                    className={cn(
-                                        "p-4 flex gap-3 text-sm hover:bg-muted/50 transition-colors cursor-pointer",
-                                        !notification.readAt && "bg-muted/20"
-                                    )}
-                                    onClick={() => {
-                                        if (!notification.readAt) {
-                                            markReadMutation.mutate({ id: notification.id });
-                                        }
-                                        // Here we could navigate to the task/page
-                                    }}
-                                >
-                                    <div className="mt-1">
-                                        {getIcon(notification.type)}
-                                    </div>
-                                    <div className="flex-1 space-y-1">
-                                        <p className="font-medium leading-none">
-                                            {notification.title}
-                                        </p>
-                                        <p className="text-muted-foreground text-xs line-clamp-2">
-                                            {notification.body}
-                                        </p>
-                                        <p className="text-[10px] text-muted-foreground">
-                                            {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
-                                        </p>
-                                    </div>
-                                    {!notification.readAt && (
+                            <AnimatePresence>
+                                {notifications?.map((notification, i) => (
+                                    <motion.div
+                                        key={notification.id}
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        transition={{ duration: 0.2, delay: i * 0.04, type: 'spring', stiffness: 300, damping: 25 }}
+                                        className={cn(
+                                            "p-4 flex gap-3 text-sm hover:bg-muted/50 transition-colors cursor-pointer",
+                                            !notification.readAt && "bg-muted/20"
+                                        )}
+                                        onClick={() => {
+                                            if (!notification.readAt) {
+                                                markReadMutation.mutate({ id: notification.id });
+                                            }
+                                        }}
+                                    >
                                         <div className="mt-1">
-                                            <div className="h-2 w-2 rounded-full bg-blue-600" />
+                                            {getIcon(notification.type)}
                                         </div>
-                                    )}
-                                </div>
-                            ))}
+                                        <div className="flex-1 space-y-1">
+                                            <p className="font-medium leading-none">
+                                                {notification.title}
+                                            </p>
+                                            <p className="text-muted-foreground text-xs line-clamp-2">
+                                                {notification.body}
+                                            </p>
+                                            <p className="text-[10px] text-muted-foreground">
+                                                {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                                            </p>
+                                        </div>
+                                        {!notification.readAt && (
+                                            <motion.div
+                                                className="mt-1"
+                                                initial={{ scale: 0 }}
+                                                animate={{ scale: 1 }}
+                                                transition={{ type: 'spring', stiffness: 500, damping: 15 }}
+                                            >
+                                                <div className="h-2 w-2 rounded-full bg-blue-600 animate-pulse" />
+                                            </motion.div>
+                                        )}
+                                    </motion.div>
+                                ))}
+                            </AnimatePresence>
                         </div>
                     )}
                 </div>

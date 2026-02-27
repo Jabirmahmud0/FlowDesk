@@ -18,11 +18,13 @@ import {
 } from '@/components/ui/select';
 
 import { TaskDetailPanel } from '@/components/tasks/task-detail-panel';
+import { CreateProjectDialog } from '@/components/projects/create-project-dialog';
 
 export default function BoardPage() {
     const { org } = useOrg();
     const { workspace, isLoading } = useWorkspace();
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
 
     // View/Edit state
     const [viewingTask, setViewingTask] = useState<any | null>(null);
@@ -80,9 +82,14 @@ export default function BoardPage() {
     if (isLoading) return <div className="p-8">Loading...</div>;
     if (!workspace) return <div className="p-8">Workspace not found</div>;
     if (!firstProjectId) return (
-        <div className="p-8 text-center">
+        <div className="p-8 text-center flex flex-col items-center justify-center h-full">
             <h2 className="text-xl font-semibold mb-2">No projects found</h2>
-            <p className="text-muted-foreground">Create a project to start adding tasks.</p>
+            <p className="text-muted-foreground mb-4">Create a project to start adding tasks.</p>
+            <Button onClick={() => setIsCreateProjectOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Project
+            </Button>
+            <CreateProjectDialog open={isCreateProjectOpen} onOpenChange={setIsCreateProjectOpen} />
         </div>
     );
 
@@ -96,10 +103,16 @@ export default function BoardPage() {
                             Project: {workspace.projects[0].name}
                         </p>
                     </div>
-                    <Button onClick={() => setIsModalOpen(true)}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        New Task
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button variant="outline" onClick={() => setIsCreateProjectOpen(true)}>
+                            <Plus className="mr-2 h-4 w-4" />
+                            New Project
+                        </Button>
+                        <Button onClick={() => setIsModalOpen(true)}>
+                            <Plus className="mr-2 h-4 w-4" />
+                            New Task
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Filters */}
@@ -156,6 +169,8 @@ export default function BoardPage() {
                     )}
                 </div>
             </div>
+
+            <CreateProjectDialog open={isCreateProjectOpen} onOpenChange={setIsCreateProjectOpen} />
 
             <TaskModal
                 open={isModalOpen}

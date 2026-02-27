@@ -3,13 +3,14 @@ import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { db } from '@/lib/db';
-import { organizations, subscriptions } from '@flowdesk/db/schema';
+import { organizations, subscriptions } from '@flowdesk/db';
 import { eq } from 'drizzle-orm';
 import Stripe from 'stripe';
 
 export async function POST(req: Request) {
     const body = await req.text();
-    const signature = headers().get('Stripe-Signature') as string;
+    const hdrs = await headers();
+    const signature = hdrs.get('Stripe-Signature') as string;
 
     let event: Stripe.Event;
 
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
     }
 
     const session = event.data.object as Stripe.Checkout.Session;
-    const subscription = event.data.object as Stripe.Subscription;
+    const subscription = event.data.object as any;
 
     if (event.type === 'checkout.session.completed') {
         if (!session?.metadata?.orgId) {
@@ -34,7 +35,7 @@ export async function POST(req: Request) {
         const subscriptionId = session.subscription as string;
 
         // Fetch subscription details to get start/end dates
-        const sub = await stripe.subscriptions.retrieve(subscriptionId);
+        const sub = await stripe.subscriptions.retrieve(subscriptionId) as any;
         const planId = sub.items.data[0].price.id;
 
         // Map price ID to plan enum
@@ -42,47 +43,37 @@ export async function POST(req: Request) {
         if (planId === process.env.STRIPE_PRICE_ID_PRO) plan = 'PRO';
         if (planId === process.env.STRIPE_PRICE_ID_TEAM) plan = 'TEAM';
 
-        // Upsert subscription
+        // Upsert subscription (uses actual schema columns)
         await db.insert(subscriptions).values({
-            stripeCustomerId: session.customer as string,
+            orgId: session.metadata.orgId,
             stripeSubId: subscriptionId,
-            stripePriceId: planId,
-            stripeCurrentPeriodEnd: new Date(sub.current_period_end * 1000),
             plan,
-            status: sub.status as any,
+            status: sub.status === 'active' ? 'ACTIVE' : sub.status === 'past_due' ? 'PAST_DUE' : sub.status === 'trialing' ? 'TRIALING' : 'CANCELED',
+            currentPeriodEnd: new Date(sub.current_period_end * 1000),
         }).onConflictDoUpdate({
-            target: subscriptions.stripeSubId,
+            target: subscriptions.orgId,
             set: {
-                stripePriceId: planId,
-                stripeCurrentPeriodEnd: new Date(sub.current_period_end * 1000),
+                stripeSubId: subscriptionId,
                 plan,
-                status: sub.status as any,
+                status: (sub.status === 'active' ? 'ACTIVE' : sub.status === 'past_due' ? 'PAST_DUE' : sub.status === 'trialing' ? 'TRIALING' : 'CANCELED') as any,
+                currentPeriodEnd: new Date(sub.current_period_end * 1000),
+                updatedAt: new Date(),
             }
         });
-
-        // Link to Org if not already linked (though relation is 1:1 on org side usually, or sub side?)
-        // Schema Step 558: `subscriptions` has `id`. `organizations` has `subscriptionId`.
-        // So we need to update organization with the new subscription ID.
-        // Wait, `subscriptions` table likely has an ID we generate? Or use `stripeSubId`?
-        // Schema Step 558: `subscriptions` usually matches `stripeSubId`?
-        // Let's assume `subscriptions` table has a uuid PK.
-        // I need to get the inserted subscription's ID.
-
-        const [insertedSub] = await db.select().from(subscriptions).where(eq(subscriptions.stripeSubId, subscriptionId));
-
-        if (insertedSub) {
-            await db.update(organizations)
-                .set({ subscriptionId: insertedSub.id })
-                .where(eq(organizations.id, session.metadata.orgId));
-        }
     }
 
     if (event.type === 'customer.subscription.updated') {
+        const priceId = subscription.items.data[0].price.id;
+        let plan: 'FREE' | 'PRO' | 'TEAM' = 'FREE';
+        if (priceId === process.env.STRIPE_PRICE_ID_PRO) plan = 'PRO';
+        if (priceId === process.env.STRIPE_PRICE_ID_TEAM) plan = 'TEAM';
+
         await db.update(subscriptions)
             .set({
-                stripePriceId: subscription.items.data[0].price.id,
-                stripeCurrentPeriodEnd: new Date(subscription.current_period_end * 1000),
-                status: subscription.status as any,
+                plan,
+                currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+                status: subscription.status === 'active' ? 'ACTIVE' : subscription.status === 'past_due' ? 'PAST_DUE' : 'CANCELED',
+                updatedAt: new Date(),
             })
             .where(eq(subscriptions.stripeSubId, subscription.id));
     }
@@ -90,11 +81,13 @@ export async function POST(req: Request) {
     if (event.type === 'customer.subscription.deleted') {
         await db.update(subscriptions)
             .set({
-                status: 'canceled',
+                status: 'CANCELED',
                 plan: 'FREE',
+                updatedAt: new Date(),
             })
             .where(eq(subscriptions.stripeSubId, subscription.id));
     }
 
     return new NextResponse(null, { status: 200 });
 }
+

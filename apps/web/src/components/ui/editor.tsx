@@ -18,6 +18,7 @@ type EditorProps = {
 
 export function Editor({ value, onChange, placeholder, className }: EditorProps) {
     const editor = useEditor({
+        immediatelyRender: false,
         extensions: [
             StarterKit,
             Placeholder.configure({
