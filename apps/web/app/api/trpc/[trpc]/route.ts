@@ -2,6 +2,8 @@ import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { appRouter } from '@flowdesk/trpc';
 import { createContext } from '@/lib/trpc-context';
 
+export const dynamic = 'force-dynamic';
+
 const handler = (req: Request) => {
   // Force rebuild
   console.log('[TRPC] Request to ' + req.url);

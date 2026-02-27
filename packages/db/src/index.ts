@@ -2,11 +2,11 @@ import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import * as schema from './schema';
 
-const connectionString = process.env.DATABASE_URL!;
-console.log('Database connection string present:', !!connectionString);
+const connectionString = process.env.DATABASE_URL || 'postgres://dummy:dummy@localhost/dummy';
+console.log('Database connection string present:', !!process.env.DATABASE_URL);
 
-if (!connectionString) {
-    console.error('DATABASE_URL is missing in packages/db');
+if (!process.env.DATABASE_URL) {
+    console.warn('DATABASE_URL is missing in packages/db. Using dummy connection string for build time.');
 }
 
 const sql = neon(connectionString);

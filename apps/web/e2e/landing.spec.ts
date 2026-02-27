@@ -34,7 +34,7 @@ test.describe('Landing Page', () => {
         await page.goto('/pricing');
         // Should show at least 2 plan cards
         const cards = page.locator('[class*="card"], [class*="plan"], article');
-        await expect(cards).toHaveCount({ min: 2 });
+        await expect(cards.nth(1)).toBeVisible();
     });
 
     test('navigation links work', async ({ page }) => {
