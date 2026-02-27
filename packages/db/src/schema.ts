@@ -612,13 +612,13 @@ export const documentCommentsRelations = relations(documentComments, ({ one, man
         fields: [documentComments.userId],
         references: [users.id],
     }),
-    replies: many(documentComments),
-}));
-
-export const documentCommentsParentRelations = relations(documentComments, ({ one }) => ({
+    replies: many(documentComments, {
+        relationName: 'commentReplies',
+    }),
     parent: one(documentComments, {
         fields: [documentComments.parentId],
         references: [documentComments.id],
+        relationName: 'commentReplies',
     }),
 }));
 

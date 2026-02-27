@@ -564,6 +564,10 @@ export default function DocumentPage() {
             {/* Version History Sheet */}
             <Sheet open={versionHistoryOpen} onOpenChange={setVersionHistoryOpen}>
                 <SheetContent side="right" className="w-[400px] sm:w-[540px] p-0">
+                    <SheetHeader className="sr-only">
+                        <SheetTitle>Version History</SheetTitle>
+                        <SheetDescription>View and restore previous versions of this document</SheetDescription>
+                    </SheetHeader>
                     {org?.id && (
                         <VersionHistoryPanel
                             orgId={org.id}
@@ -577,6 +581,10 @@ export default function DocumentPage() {
             {/* Comments Sheet */}
             <Sheet open={commentsOpen} onOpenChange={setCommentsOpen}>
                 <SheetContent side="right" className="w-[400px] sm:w-[540px] p-0">
+                    <SheetHeader className="sr-only">
+                        <SheetTitle>Comments</SheetTitle>
+                        <SheetDescription>View and add comments to this document</SheetDescription>
+                    </SheetHeader>
                     {org?.id && (
                         <DocumentCommentPanel
                             orgId={org.id}
