@@ -15,6 +15,7 @@
         "@flowdesk/db": "*",
         "@flowdesk/types": "*",
         "@trpc/server": "^11.0.0",
+        "cloudinary": "^2.9.0",
         "stripe": "^20.3.1",
         "superjson": "^2.2.0",
         "zod": "^3.24.0"

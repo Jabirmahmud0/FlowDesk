@@ -37,11 +37,13 @@ export function AttachmentPanel({ taskId }: AttachmentPanelProps) {
         { enabled: !!org?.id && !!taskId }
     );
 
-    const createAttachment = trpc.attachment.create.useMutation({
+    const createSignature = trpc.attachments.createUploadSignature.useMutation();
+
+    const createAttachment = trpc.attachments.registerAttachment.useMutation({
         onSuccess: () => utils.attachment.listByTask.invalidate({ taskId }),
     });
 
-    const deleteAttachment = trpc.attachment.delete.useMutation({
+    const deleteAttachment = trpc.attachments.deleteAttachment.useMutation({
         onSuccess: () => utils.attachment.listByTask.invalidate({ taskId }),
     });
 
@@ -51,28 +53,34 @@ export function AttachmentPanel({ taskId }: AttachmentPanelProps) {
         setUploadError(null);
 
         try {
+            // 1. Get Signature
+            const sig = await createSignature.mutateAsync({ folder: `flowdesk_tasks/${taskId}` });
+
+            // 2. Upload to Cloudinary
             const formData = new FormData();
             formData.append('file', file);
+            formData.append('api_key', sig.apiKey!);
+            formData.append('timestamp', sig.timestamp.toString());
+            formData.append('signature', sig.signature);
+            formData.append('folder', sig.folder);
 
-            const response = await fetch('/api/upload', {
-                method: 'POST',
-                body: formData,
-            });
+            const uploadRes = await fetch(
+                `https://api.cloudinary.com/v1_1/${sig.cloudName}/auto/upload`,
+                { method: 'POST', body: formData }
+            );
 
-            if (!response.ok) {
-                const err = await response.json().catch(() => ({}));
-                throw new Error(err.error || 'Upload failed');
-            }
+            if (!uploadRes.ok) throw new Error('Failed to upload file to storage');
 
-            const result = await response.json();
+            const cloudinaryData = await uploadRes.json();
 
+            // 3. Register in DB
             await createAttachment.mutateAsync({
-                orgId: org.id,
                 taskId,
-                url: result.url,
-                publicId: result.publicId,
-                filename: result.filename,
-                size: result.size,
+                url: cloudinaryData.secure_url,
+                publicId: cloudinaryData.public_id,
+                filename: file.name,
+                size: file.size,
+                mimeType: file.type || 'application/octet-stream',
             });
         } catch (err: any) {
             setUploadError(err.message || 'Upload failed');
@@ -97,7 +105,7 @@ export function AttachmentPanel({ taskId }: AttachmentPanelProps) {
 
     const handleDelete = async (id: string) => {
         if (!org?.id) return;
-        await deleteAttachment.mutateAsync({ orgId: org.id, id });
+        await deleteAttachment.mutateAsync({ id });
     };
 
     return (

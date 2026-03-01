@@ -32,8 +32,9 @@ export function OrgSwitcher({ className }: { className?: string }) {
     const [open, setOpen] = React.useState(false);
 
     const handleOrgChange = (slug: string) => {
-        router.push(`/${slug}`);
         setOpen(false);
+        // Use replace to avoid back button issues during org switching
+        router.replace(`/${slug}`);
     };
 
     return (

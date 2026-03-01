@@ -14,8 +14,9 @@ export function useOrg() {
         {
             enabled: !!slug,
             retry: (failureCount, error) => {
-                // Don't retry on not-found/access errors — redirect instead
+                // Don't retry on not-found/access errors or network errors during navigation
                 if (error.message?.includes('not found') || error.message?.includes('not a member')) return false;
+                if (error.message?.includes('Failed to fetch')) return false;
                 return failureCount < 2;
             }
         }

@@ -20,6 +20,11 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
                     queries: {
                         staleTime: 5 * 1000,
                         refetchOnWindowFocus: false,
+                        retry: (failureCount, error) => {
+                            // Don't retry on network errors during navigation
+                            if (error.message?.includes('Failed to fetch')) return false;
+                            return failureCount < 2;
+                        },
                     },
                 },
             })

@@ -170,8 +170,8 @@ export default function DocsPage() {
                             </div>
                             <div className="mt-4">
                                 <Button
-                                    variant="secondary"
-                                    className="w-full"
+                                    variant="outline"
+                                    className="w-full hover:bg-primary hover:text-primary-foreground transition-colors"
                                     onClick={() => router.push(`/${org!.slug}/${workspace!.slug}/docs/${doc.id}`)}
                                 >
                                     Open

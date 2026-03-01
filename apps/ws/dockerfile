@@ -1,0 +1,17 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+RUN npm install
+
+# Copy source
+COPY . .
+
+EXPOSE 3020
+
+# Nodemon for dev hot reload
+RUN npm install -g nodemon ts-node typescript
+
+CMD ["npm", "run", "dev"]

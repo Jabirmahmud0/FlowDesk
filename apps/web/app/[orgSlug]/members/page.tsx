@@ -51,7 +51,7 @@ export default function MembersPage() {
     const { toast } = useToast();
     const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
     const [inviteEmail, setInviteEmail] = useState('');
-    const [inviteRole, setInviteRole] = useState<'MEMBER' | 'VIEWER'>('MEMBER');
+    const [inviteRole, setInviteRole] = useState<'ADMIN' | 'MEMBER' | 'VIEWER'>('MEMBER');
 
     const utils = trpc.useUtils();
 
@@ -235,6 +235,7 @@ export default function MembersPage() {
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
+                                        <SelectItem value="ADMIN">Admin</SelectItem>
                                         <SelectItem value="MEMBER">Member</SelectItem>
                                         <SelectItem value="VIEWER">Viewer</SelectItem>
                                     </SelectContent>

@@ -16,7 +16,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         if (!session?.user?.id) return;
 
         // In production, this would be an env var
-        const socketUrl = 'http://localhost:3001';
+        const socketUrl = 'http://localhost:3020';
 
         const socketInstance = io(socketUrl, {
             query: {

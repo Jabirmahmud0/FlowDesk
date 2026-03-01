@@ -12,8 +12,16 @@ import {
     pgEnum,
     serial,
     real,
+    customType,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
+
+// Custom type for tsvector
+const tsvector = customType<{ data: string }>({
+    dataType() {
+        return 'tsvector';
+    },
+});
 
 // ─── Enums ──────────────────────────────────────────────────────────
 export const orgRoleEnum = pgEnum('org_role', ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER']);
@@ -269,12 +277,14 @@ export const tasks = pgTable(
         completedAt: timestamp('completed_at', { mode: 'date' }),
         createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
         updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
+        searchVector: tsvector('search_vector'),
     },
     (table) => ({
         projectStatusIdx: index('tasks_project_status_idx').on(table.projectId, table.status),
         orgIdIdx: index('tasks_org_id_idx').on(table.orgId),
         assigneeIdx: index('tasks_assignee_id_idx').on(table.assigneeId),
         dueDateIdx: index('tasks_due_date_idx').on(table.dueDate),
+        searchIdx: index('tasks_search_idx').using('gin', table.searchVector),
     })
 );
 
@@ -429,11 +439,13 @@ export const documents = pgTable(
             .references(() => users.id),
         createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
         updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
+        searchVector: tsvector('search_vector'),
     },
     (table) => ({
         workspaceIdx: index('documents_workspace_id_idx').on(table.workspaceId),
         orgIdIdx: index('documents_org_id_idx').on(table.orgId),
         parentIdx: index('documents_parent_id_idx').on(table.parentId),
+        searchIdx: index('documents_search_idx').using('gin', table.searchVector),
     })
 );
 

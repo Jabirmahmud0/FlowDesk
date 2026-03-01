@@ -12,23 +12,24 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 // ─── Redis Pub/Sub Adapter (optional, for horizontal scaling) ────────
 // When REDIS_URL is set, Socket.io events are shared across all server
 // instances via Redis Pub/Sub — required for multi-pod deployments.
-async function trySetupRedisAdapter(io: Server): Promise<void> {
-    if (!process.env.REDIS_URL) {
-        console.log('[WS] REDIS_URL not set — using in-memory adapter (single server only)');
-        return;
-    }
-
-    try {
-        const { createAdapter } = await import('@socket.io/redis-adapter');
-        const { default: Redis } = await import('ioredis');
-        const pubClient = new Redis(process.env.REDIS_URL);
-        const subClient = pubClient.duplicate();
-        io.adapter(createAdapter(pubClient, subClient));
-        console.log('[WS] Redis Pub/Sub adapter enabled for horizontal scaling');
-    } catch (err) {
-        console.error('[WS] Failed to set up Redis adapter — falling back to in-memory:', err);
-    }
-}
+// COMMENTED OUT FOR NOW
+// async function trySetupRedisAdapter(io: Server): Promise<void> {
+//     if (!process.env.REDIS_URL) {
+//         console.log('[WS] REDIS_URL not set — using in-memory adapter (single server only)');
+//         return;
+//     }
+//
+//     try {
+//         const { createAdapter } = await import('@socket.io/redis-adapter');
+//         const { default: Redis } = await import('ioredis');
+//         const pubClient = new Redis(process.env.REDIS_URL);
+//         const subClient = pubClient.duplicate();
+//         io.adapter(createAdapter(pubClient, subClient));
+//         console.log('[WS] Redis Pub/Sub adapter enabled for horizontal scaling');
+//     } catch (err) {
+//         console.error('[WS] Failed to set up Redis adapter — falling back to in-memory:', err);
+//     }
+// }
 
 // ─── Firebase Admin Initialization ──────────────────────────────────
 if (!admin.apps.length) {
@@ -160,6 +161,23 @@ io.on('connection', (socket: Socket) => {
         });
     });
 
+    // Explicit Documented Real-Time Events
+    socket.on('task:created', (data: { projectId: string; task: any }) => {
+        socket.to(`project:${data.projectId}`).emit('TASK_CREATED', data);
+    });
+
+    socket.on('task:moved', (data: { projectId: string; taskId: string; from: string; to: string }) => {
+        socket.to(`project:${data.projectId}`).emit('TASK_MOVED', data);
+    });
+
+    socket.on('comment:added', (data: { taskId: string; comment: any }) => {
+        socket.to(`task:${data.taskId}`).emit('COMMENT_ADDED', data);
+    });
+
+    socket.on('notification:new', (data: { userId: string; notification: any }) => {
+        socket.to(`user:${data.userId}`).emit('NEW_NOTIFICATION', data);
+    });
+
     // Heartbeat
     socket.on('heartbeat', () => {
         socket.emit('heartbeat:ack', { timestamp: Date.now() });
@@ -208,8 +226,8 @@ app.get('/health', (_req, res) => {
     });
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3020;
 server.listen(PORT, async () => {
-    await trySetupRedisAdapter(io);
+    // await trySetupRedisAdapter(io);
     console.log(`WebSocket server running on port ${PORT}`);
 });

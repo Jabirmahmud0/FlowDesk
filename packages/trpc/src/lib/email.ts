@@ -17,6 +17,10 @@ interface SendEmailOptions {
 }
 
 async function sendEmail({ to, subject, html, replyTo }: SendEmailOptions) {
+    console.log('[Email] Sending email to:', to);
+    console.log('[Email] RESEND_API_KEY present:', !!RESEND_API_KEY);
+    console.log('[Email] FROM_EMAIL:', FROM_EMAIL);
+    
     if (!RESEND_API_KEY) {
         console.warn('[Email] RESEND_API_KEY not set. Skipping email send.');
         console.log(`[Email] Would send to: ${to}, subject: ${subject}`);

@@ -2,7 +2,7 @@
 export async function broadcast(event: string, data: any, room: string) {
     try {
         // In production, this URL should be an env var
-        const response = await fetch('http://localhost:3001/broadcast', {
+        const response = await fetch('http://localhost:3020/broadcast', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ event, data, room })

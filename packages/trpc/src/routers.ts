@@ -47,6 +47,7 @@ import { eq, and, desc, asc, ilike, or, sql, inArray, gte, isNull } from 'drizzl
 import { broadcast } from './lib/socket';
 import { randomUUID } from 'crypto';
 import { billingRouter } from './routers/billing';
+import { attachmentsRouter } from './routers/attachments';
 import { checkMemberLimit, checkProjectLimit } from './lib/plan-limits';
 import { sendInviteEmail } from './lib/email';
 
@@ -151,7 +152,7 @@ export const orgRouter = router({
             });
 
             if (!org) throw new Error('Organization not found');
-            
+
             // Verify user is a member of this organization
             const isMember = org.members.some((m: any) => m.userId === ctx.user.id);
             if (!isMember) {
@@ -160,7 +161,7 @@ export const orgRouter = router({
                     message: 'You are not a member of this organization',
                 });
             }
-            
+
             return org;
         }),
 
@@ -1686,6 +1687,7 @@ export const appRouter = router({
     workspace: workspaceRouter,
     project: projectRouter,
     task: taskRouter,
+    attachments: attachmentsRouter,
     comment: commentRouter,
     document: documentRouter,
     notification: notificationRouter,

@@ -64,7 +64,9 @@ export default function NotificationsPage() {
         { enabled: !!org?.id }
     );
 
-    const { data: unreadCount } = trpc.notification.getUnreadCount.useQuery();
+    const { data: unreadCount } = trpc.notification.getUnreadCount.useQuery(undefined, {
+        enabled: !!org?.id,
+    });
 
     const markReadMutation = trpc.notification.markRead.useMutation({
         onSuccess: () => {

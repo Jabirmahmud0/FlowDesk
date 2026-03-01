@@ -55,19 +55,10 @@ export const createOrgProcedure = (minRole?: 'OWNER' | 'ADMIN' | 'MEMBER') => {
         // @ts-ignore
         const _input = (input || rawInput || {}) as any;
 
-        // Debug log (keep enabled until verified)
-        console.log('[Middleware] Input resolution:', {
-            hasInput: !!input,
-            hasRawInput: !!rawInput,
-            extractedKeys: Object.keys(_input || {}),
-            val: _input
-        });
-
         // Handle possible nested SuperJSON structure or direct input
         const orgId = _input?.orgId || _input?.json?.orgId || ctx.orgId;
 
         if (!orgId) {
-            console.error('[Middleware] Missing orgId. Full Input was:', JSON.stringify(_input));
             throw new TRPCError({
                 code: 'BAD_REQUEST',
                 message: 'Organization ID is required',

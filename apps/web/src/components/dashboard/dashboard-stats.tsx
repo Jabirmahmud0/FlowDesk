@@ -11,7 +11,10 @@ interface DashboardStatsProps {
 
 export function DashboardStats({ orgId }: DashboardStatsProps) {
     const { data: tasks, isLoading: tasksLoading } = trpc.task.myTasks.useQuery({ orgId });
-    const { data: unreadCount, isLoading: notifLoading } = trpc.notification.getUnreadCount.useQuery();
+    const { data: unreadCount, isLoading: notifLoading } = trpc.notification.getUnreadCount.useQuery(
+        undefined,
+        { enabled: !!orgId }
+    );
     const { data: completion } = trpc.analytics.getTaskCompletion.useQuery({ orgId });
 
     if (tasksLoading || notifLoading) {
