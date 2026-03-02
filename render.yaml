@@ -5,7 +5,7 @@ services:
     region: oregon
     plan: free
     rootDir: apps/ws
-    buildCommand: npm install && npx tsc
+    buildCommand: npm install --legacy-peer-deps && npx tsc
     startCommand: node dist/server.js
     envVars:
       - key: NODE_ENV
@@ -23,4 +23,4 @@ services:
       - key: UPSTASH_REDIS_REST_TOKEN
         sync: false
       - key: ALLOWED_ORIGINS
-        value: https://flowdeskmanager.vercel.app,https://flowdeskmanager-git-main-jabirmahmud0s-projects.vercel.app
+        value: https://flowdeskmanager.vercel.app
