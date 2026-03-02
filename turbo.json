@@ -1,6 +1,27 @@
 {
     "$schema": "https://turbo.build/schema.json",
     "ui": "tui",
+    "globalEnv": [
+        "DATABASE_URL",
+        "NEXTAUTH_SECRET",
+        "STRIPE_SECRET_KEY",
+        "STRIPE_PUBLISHABLE_KEY",
+        "STRIPE_WEBHOOK_SECRET",
+        "UPSTASH_REDIS_REST_URL",
+        "UPSTASH_REDIS_REST_TOKEN",
+        "CLOUDINARY_CLOUD_NAME",
+        "CLOUDINARY_API_KEY",
+        "CLOUDINARY_API_SECRET",
+        "RESEND_API_KEY",
+        "FROM_EMAIL",
+        "NEXTAUTH_URL",
+        "NEXT_PUBLIC_APP_URL",
+        "NEXT_PUBLIC_WS_URL",
+        "FIREBASE_ADMIN_PROJECT_ID",
+        "FIREBASE_ADMIN_CLIENT_EMAIL",
+        "FIREBASE_ADMIN_PRIVATE_KEY",
+        "NODE_ENV"
+    ],
     "tasks": {
         "build": {
             "dependsOn": [
