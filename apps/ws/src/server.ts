@@ -1,35 +1,16 @@
-
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import http from 'http';
 import { Server, Socket } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import admin from 'firebase-admin';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
-
-// ─── Redis Pub/Sub Adapter (optional, for horizontal scaling) ────────
-// When REDIS_URL is set, Socket.io events are shared across all server
-// instances via Redis Pub/Sub — required for multi-pod deployments.
-// COMMENTED OUT FOR NOW
-// async function trySetupRedisAdapter(io: Server): Promise<void> {
-//     if (!process.env.REDIS_URL) {
-//         console.log('[WS] REDIS_URL not set — using in-memory adapter (single server only)');
-//         return;
-//     }
-//
-//     try {
-//         const { createAdapter } = await import('@socket.io/redis-adapter');
-//         const { default: Redis } = await import('ioredis');
-//         const pubClient = new Redis(process.env.REDIS_URL);
-//         const subClient = pubClient.duplicate();
-//         io.adapter(createAdapter(pubClient, subClient));
-//         console.log('[WS] Redis Pub/Sub adapter enabled for horizontal scaling');
-//     } catch (err) {
-//         console.error('[WS] Failed to set up Redis adapter — falling back to in-memory:', err);
-//     }
-// }
 
 // ─── Firebase Admin Initialization ──────────────────────────────────
 if (!admin.apps.length) {
@@ -90,7 +71,7 @@ function getOnlineUsers(orgId: string): string[] {
 }
 
 // ─── JWT Auth Middleware ─────────────────────────────────────────────
-io.use(async (socket: Socket, next) => {
+io.use(async (socket: Socket, next: (err?: any) => void) => {
     try {
         const token = socket.handshake.auth?.token || socket.handshake.query?.token;
 
@@ -199,7 +180,7 @@ io.on('connection', (socket: Socket) => {
     });
 
     // Disconnect
-    socket.on('disconnect', (reason) => {
+    socket.on('disconnect', (reason: string) => {
         console.log(`Client disconnected: ${socket.id} | reason: ${reason}`);
         if (orgId && userId) {
             removeOnlineUser(orgId, userId);
@@ -213,7 +194,7 @@ io.on('connection', (socket: Socket) => {
 });
 
 // ─── Private Broadcast Endpoint ─────────────────────────────────────
-app.post('/broadcast', (req, res) => {
+app.post('/broadcast', (req: Request, res: Response) => {
     const { event, data, room } = req.body;
 
     if (!event || !room) {
@@ -227,13 +208,13 @@ app.post('/broadcast', (req, res) => {
 });
 
 // ─── Presence API ───────────────────────────────────────────────────
-app.get('/presence/:orgId', (req, res) => {
+app.get('/presence/:orgId', (req: Request, res: Response) => {
     const users = getOnlineUsers(req.params.orgId);
     res.json({ onlineUsers: users, count: users.length });
 });
 
 // ─── Health Check ───────────────────────────────────────────────────
-app.get('/health', (_req, res) => {
+app.get('/health', (_req: Request, res: Response) => {
     res.json({
         status: 'ok',
         connections: io.engine.clientsCount,
@@ -242,7 +223,6 @@ app.get('/health', (_req, res) => {
 });
 
 const PORT = process.env.PORT || 3020;
-server.listen(PORT, async () => {
-    // await trySetupRedisAdapter(io);
+server.listen(PORT, () => {
     console.log(`WebSocket server running on port ${PORT}`);
 });
