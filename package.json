@@ -14,8 +14,10 @@
     "db:generate": "npm run generate --workspace=@flowdesk/db",
     "db:studio": "npm run studio --workspace=@flowdesk/db"
   },
+  "dependencies": {
+    "turbo": "^2.4.0"
+  },
   "devDependencies": {
-    "turbo": "^2.4.0",
     "typescript": "^5.7.0"
   },
   "engines": {
