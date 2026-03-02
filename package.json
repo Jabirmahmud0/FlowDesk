@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
+    "start": "npm run start --workspace=@flowdesk/web",
     "lint": "turbo lint",
     "type-check": "turbo type-check",
     "db:push": "npm run db:push --workspace=@flowdesk/db",
