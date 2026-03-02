@@ -10,22 +10,22 @@ interface DashboardStatsProps {
 }
 
 export function DashboardStats({ orgId }: DashboardStatsProps) {
-    const { data: tasks, isLoading: tasksLoading } = trpc.task.myTasks.useQuery({ orgId });
-    const { data: unreadCount, isLoading: notifLoading } = trpc.notification.getUnreadCount.useQuery(
+    const { data: tasks } = trpc.task.myTasks.useQuery({ orgId }, {
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        refetchOnWindowFocus: false,
+    });
+    const { data: unreadCount } = trpc.notification.getUnreadCount.useQuery(
         undefined,
-        { enabled: !!orgId }
+        {
+            enabled: !!orgId,
+            staleTime: 2 * 60 * 1000, // 2 minutes
+            refetchOnWindowFocus: false,
+        }
     );
-    const { data: completion } = trpc.analytics.getTaskCompletion.useQuery({ orgId });
-
-    if (tasksLoading || notifLoading) {
-        return (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {[...Array(4)].map((_, i) => (
-                    <Card key={i} className="h-28 animate-pulse bg-muted/50" />
-                ))}
-            </div>
-        );
-    }
+    const { data: completion } = trpc.analytics.getTaskCompletion.useQuery({ orgId }, {
+        staleTime: 5 * 60 * 1000,
+        refetchOnWindowFocus: false,
+    });
 
     const totalTasks = tasks?.length || 0;
     const completedTasks = tasks?.filter(t => t.status === 'DONE').length || 0;
@@ -104,7 +104,6 @@ export function DashboardStats({ orgId }: DashboardStatsProps) {
                             </div>
                         )}
                     </CardContent>
-                    {/* Subtle gradient accent */}
                     <div className={cn('absolute bottom-0 left-0 right-0 h-0.5', stat.bg)} />
                 </Card>
             ))}

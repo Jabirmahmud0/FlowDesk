@@ -21,14 +21,14 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+        const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
         const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET;
         const apiKey = process.env.CLOUDINARY_API_KEY;
         const apiSecret = process.env.CLOUDINARY_API_SECRET;
 
         if (!cloudName) {
             return NextResponse.json(
-                { error: 'Cloudinary not configured. Set NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME.' },
+                { error: 'Cloudinary not configured. Set CLOUDINARY_CLOUD_NAME.' },
                 { status: 503 }
             );
         }

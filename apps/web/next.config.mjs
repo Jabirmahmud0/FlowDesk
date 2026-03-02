@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     transpilePackages: ['@flowdesk/db', '@flowdesk/trpc', '@flowdesk/types'],
+    output: 'standalone',
     images: {
         remotePatterns: [
             { protocol: 'https', hostname: 'res.cloudinary.com' },
@@ -8,6 +9,9 @@ const nextConfig = {
             { protocol: 'https', hostname: 'avatars.githubusercontent.com' },
         ],
     },
+    // Production optimizations
+    poweredByHeader: false,
+    compress: true,
 };
 
 export default nextConfig;

@@ -7,8 +7,8 @@
 
 import { PLAN_LIMITS, type Plan } from '@flowdesk/types';
 import { TRPCError } from '@trpc/server';
-import { eq, sql } from 'drizzle-orm';
-import { orgMembers, projects, subscriptions } from '@flowdesk/db';
+import { eq, sql, sum } from 'drizzle-orm';
+import { orgMembers, projects, subscriptions, attachments } from '@flowdesk/db';
 
 type DB = any; // Use actual Drizzle client type if available
 
@@ -60,3 +60,39 @@ export async function checkProjectLimit(db: DB, orgId: string): Promise<void> {
         });
     }
 }
+
+export async function checkStorageLimit(db: DB, orgId: string, additionalSizeBytes: number = 0): Promise<void> {
+    const plan = await getOrgPlan(db, orgId);
+    const limits = PLAN_LIMITS[plan];
+
+    const maxStorageBytes = limits.maxStorageMB * 1024 * 1024;
+
+    const [result] = await db
+        .select({ total: sum(attachments.size) })
+        .from(attachments)
+        .where(eq(attachments.orgId, orgId));
+
+    const currentStorage = Number(result?.total) || 0;
+
+    if (currentStorage + additionalSizeBytes > maxStorageBytes) {
+        const currentMB = Math.round(currentStorage / (1024 * 1024));
+        const maxMB = limits.maxStorageMB;
+        throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: `Your ${plan} plan allows up to ${maxMB}MB of storage. You're currently using ${currentMB}MB. Please upgrade to add more files.`,
+        });
+    }
+}
+
+export async function checkActivityHistoryLimit(db: DB, orgId: string): Promise<number> {
+    const plan = await getOrgPlan(db, orgId);
+    const limits = PLAN_LIMITS[plan];
+
+    if (limits.activityLogDays === Infinity) return 0; // No limit
+
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - limits.activityLogDays);
+
+    return limits.activityLogDays;
+}
+

@@ -33,13 +33,28 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 // ─── Firebase Admin Initialization ──────────────────────────────────
 if (!admin.apps.length) {
-    admin.initializeApp({
-        credential: admin.credential.cert({
-            projectId: process.env.FIREBASE_PROJECT_ID,
-            privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        }),
-    });
+    // Use service account JSON file if it exists, otherwise use env vars
+    const serviceAccountPath = path.resolve(__dirname, '../firebase-service-account.json');
+    const fs = require('fs');
+    
+    if (fs.existsSync(serviceAccountPath)) {
+        const serviceAccount = require(serviceAccountPath);
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+        });
+        console.log('[WS] Firebase Admin initialized from service account file');
+    } else if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY) {
+        admin.initializeApp({
+            credential: admin.credential.cert({
+                projectId: process.env.FIREBASE_PROJECT_ID,
+                privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+                clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+            }),
+        });
+        console.log('[WS] Firebase Admin initialized from environment variables');
+    } else {
+        console.warn('[WS] Firebase credentials not configured - Firebase features disabled');
+    }
 }
 
 const app = express();

@@ -56,10 +56,15 @@ export function AttachmentPanel({ taskId }: AttachmentPanelProps) {
             // 1. Get Signature
             const sig = await createSignature.mutateAsync({ folder: `flowdesk_tasks/${taskId}` });
 
+            // Check if Cloudinary is configured
+            if (!sig.cloudName || !sig.apiKey) {
+                throw new Error('Cloudinary not configured. Please add CLOUDINARY_* environment variables.');
+            }
+
             // 2. Upload to Cloudinary
             const formData = new FormData();
             formData.append('file', file);
-            formData.append('api_key', sig.apiKey!);
+            formData.append('api_key', sig.apiKey);
             formData.append('timestamp', sig.timestamp.toString());
             formData.append('signature', sig.signature);
             formData.append('folder', sig.folder);
@@ -69,7 +74,10 @@ export function AttachmentPanel({ taskId }: AttachmentPanelProps) {
                 { method: 'POST', body: formData }
             );
 
-            if (!uploadRes.ok) throw new Error('Failed to upload file to storage');
+            if (!uploadRes.ok) {
+                const errorData = await uploadRes.json().catch(() => ({}));
+                throw new Error(errorData.error?.message || `Upload failed: ${uploadRes.statusText}`);
+            }
 
             const cloudinaryData = await uploadRes.json();
 
@@ -83,11 +91,12 @@ export function AttachmentPanel({ taskId }: AttachmentPanelProps) {
                 mimeType: file.type || 'application/octet-stream',
             });
         } catch (err: any) {
+            console.error('[Attachment Upload] Error:', err);
             setUploadError(err.message || 'Upload failed');
         } finally {
             setUploading(false);
         }
-    }, [org?.id, taskId, createAttachment]);
+    }, [org?.id, taskId, createAttachment, createSignature]);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];

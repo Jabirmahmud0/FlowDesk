@@ -4,14 +4,20 @@ WORKDIR /app
 
 # Install dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm ci --only=production
 
 # Copy source
 COPY . .
 
+# Build TypeScript
+RUN npm run build
+
+# Install production dependencies only
+RUN npm prune --production
+
 EXPOSE 3020
 
-# Nodemon for dev hot reload
-RUN npm install -g nodemon ts-node typescript
+ENV NODE_ENV=production
+ENV PORT=3020
 
-CMD ["npm", "run", "dev"]
+CMD ["node", "dist/server.js"]

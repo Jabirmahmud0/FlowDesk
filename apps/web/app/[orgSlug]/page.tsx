@@ -29,21 +29,13 @@ const PRIORITY_COLORS: Record<string, string> = {
 };
 
 function MyTasksPanel({ orgId }: { orgId: string }) {
-    const { data: tasks, isLoading } = trpc.task.myTasks.useQuery({ orgId });
+    const { data: tasks } = trpc.task.myTasks.useQuery({ orgId }, {
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        refetchOnWindowFocus: false,
+    });
     const pendingTasks = tasks?.filter(t => t.status === 'TODO' || t.status === 'IN_PROGRESS' || t.status === 'IN_REVIEW').slice(0, 6) || [];
 
-
-    if (isLoading) {
-        return (
-            <div className="space-y-2">
-                {[...Array(4)].map((_, i) => (
-                    <div key={i} className="h-12 rounded-lg bg-muted/50 animate-pulse" />
-                ))}
-            </div>
-        );
-    }
-
-    if (pendingTasks.length === 0) {
+    if (!pendingTasks.length) {
         return (
             <div className="text-center py-8">
                 <CheckSquare className="h-8 w-8 mx-auto mb-2 text-emerald-500/50" />

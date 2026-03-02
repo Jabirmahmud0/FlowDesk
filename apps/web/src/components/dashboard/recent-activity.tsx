@@ -50,9 +50,12 @@ interface RecentActivityProps {
 }
 
 export function RecentActivity({ orgId }: RecentActivityProps) {
-    const { data: activities, isLoading } = trpc.activity.list.useQuery({
+    const { data: activities } = trpc.activity.list.useQuery({
         orgId,
         limit: 8,
+    }, {
+        staleTime: 3 * 60 * 1000, // 3 minutes
+        refetchOnWindowFocus: false,
     });
 
     return (
@@ -71,19 +74,7 @@ export function RecentActivity({ orgId }: RecentActivityProps) {
                 </div>
             </CardHeader>
             <CardContent className="pt-0">
-                {isLoading ? (
-                    <div className="space-y-4">
-                        {[...Array(5)].map((_, i) => (
-                            <div key={i} className="flex items-center gap-3 animate-pulse">
-                                <div className="h-8 w-8 rounded-full bg-muted flex-shrink-0" />
-                                <div className="space-y-1.5 flex-1">
-                                    <div className="h-3 w-3/4 bg-muted rounded" />
-                                    <div className="h-2.5 w-1/3 bg-muted/60 rounded" />
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : !activities || activities.length === 0 ? (
+                {!activities || activities.length === 0 ? (
                     <div className="text-center py-8">
                         <Activity className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
                         <p className="text-sm text-muted-foreground">No activity yet.</p>

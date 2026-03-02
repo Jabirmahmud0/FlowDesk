@@ -1,7 +1,7 @@
-    'use client';
+'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
-import { usePathname } from 'next/navigation';
+import { motion } from 'framer-motion';
+
 import React from 'react';
 
 const pageVariants = {
@@ -17,22 +17,16 @@ const pageTransition = {
 };
 
 export function PageTransition({ children }: { children: React.ReactNode }) {
-    const pathname = usePathname();
-
     return (
-        <AnimatePresence mode="wait">
-            <motion.div
-                key={pathname}
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                variants={pageVariants}
-                transition={pageTransition}
-                className="h-full"
-            >
-                {children}
-            </motion.div>
-        </AnimatePresence>
+        <motion.div
+            initial="initial"
+            animate="animate"
+            variants={pageVariants}
+            transition={pageTransition}
+            className="h-full"
+        >
+            {children}
+        </motion.div>
     );
 }
 

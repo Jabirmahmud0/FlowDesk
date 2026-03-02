@@ -1,35 +1,81 @@
-services:
-  # redis:
-  #   image: redis:alpine
-  #   container_name: redis
-  #   ports:
-  #     - "6379:6379"
-  #   restart: always
-  #   volumes:
-  #     - redis_data:/data
-  #   command: ["redis-server", "--appendonly", "yes"]
-  #   healthcheck:
-  #     test: ["CMD", "redis-cli", "ping"]
-  #     interval: 5s
-  #     timeout: 3s
-  #     retries: 20
+version: '3.8'
 
+services:
+  # ─── PostgreSQL Database ─────────────────────────────
+  db:
+    image: postgres:15-alpine
+    container_name: flowdesk-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-flowdesk}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-flowdesk_secret}
+      POSTGRES_DB: flowdesk
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-flowdesk}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis (for real-time & queues) ──────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: flowdesk-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: ["redis-server", "--appendonly", "yes"]
+
+  # ─── WebSocket Server ────────────────────────────────
   ws:
     build:
       context: ./apps/ws
-      dockerfile: Dockerfile
+      dockerfile: dockerfile
     container_name: flowdesk-ws
-    # depends_on:
-    #   redis:
-    #     condition: service_healthy
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
     ports:
-      - "3020:3020"
-    restart: always
-    volumes:
-      - ./apps/ws:/app
-      - /app/node_modules
+      - "${WS_PORT:-3020}:3020"
     env_file:
       - ./apps/ws/.env
+    environment:
+      - NODE_ENV=production
+
+  # ─── Web Application ─────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: ./apps/web/Dockerfile
+    container_name: flowdesk-web
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ws:
+        condition: service_started
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${DB_USER:-flowdesk}:${DB_PASSWORD:-flowdesk_secret}@db:5432/flowdesk
+      - UPSTASH_REDIS_REST_URL=redis://redis:6379
 
 volumes:
+  postgres_data:
   redis_data:

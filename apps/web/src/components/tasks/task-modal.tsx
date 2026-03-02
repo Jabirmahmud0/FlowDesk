@@ -50,6 +50,7 @@ type Props = {
 export function TaskModal({ open, onOpenChange, task, projectId }: Props) {
     const { workspace } = useWorkspace();
     const utils = trpc.useUtils();
+    const [calendarOpen, setCalendarOpen] = useState(false);
 
     const formSchema = createTaskSchema.omit({ orgId: true }).extend({
         dueDate: z.date().optional().nullable(),
@@ -182,12 +183,12 @@ export function TaskModal({ open, onOpenChange, task, projectId }: Props) {
                             control={form.control}
                             name="dueDate"
                             render={({ field }) => (
-                                <Popover>
+                                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                                     <PopoverTrigger asChild>
                                         <Button
                                             variant={"outline"}
                                             className={cn(
-                                                "pl-3 text-left font-normal",
+                                                "w-full pl-3 text-left font-normal hover:bg-accent hover:text-accent-foreground transition-colors",
                                                 !field.value && "text-muted-foreground"
                                             )}
                                         >
@@ -203,11 +204,13 @@ export function TaskModal({ open, onOpenChange, task, projectId }: Props) {
                                         <Calendar
                                             mode="single"
                                             selected={field.value}
-                                            onSelect={field.onChange}
+                                            onSelect={(date) => {
+                                                field.onChange(date);
+                                                setCalendarOpen(false);
+                                            }}
                                             disabled={(date) =>
                                                 date < new Date("1900-01-01")
                                             }
-                                            initialFocus
                                         />
                                     </PopoverContent>
                                 </Popover>

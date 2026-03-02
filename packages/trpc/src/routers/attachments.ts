@@ -15,6 +15,17 @@ export const attachmentsRouter = router({
     createUploadSignature: protectedProcedure
         .input(z.object({ folder: z.string().optional() }))
         .mutation(async ({ input }) => {
+            // Check if Cloudinary is configured
+            const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+            const apiKey = process.env.CLOUDINARY_API_KEY;
+            const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+            if (!cloudName || !apiKey || !apiSecret) {
+                throw new Error(
+                    'Cloudinary not configured. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET environment variables.'
+                );
+            }
+
             const timestamp = Math.round(new Date().getTime() / 1000);
             const folder = input.folder || 'flowdesk_uploads';
 
@@ -23,15 +34,15 @@ export const attachmentsRouter = router({
                     timestamp,
                     folder,
                 },
-                process.env.CLOUDINARY_API_SECRET!
+                apiSecret
             );
 
             return {
                 timestamp,
                 signature,
                 folder,
-                apiKey: process.env.CLOUDINARY_API_KEY,
-                cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+                apiKey,
+                cloudName,
             };
         }),
 

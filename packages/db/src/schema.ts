@@ -522,7 +522,32 @@ export const notifications = pgTable(
     })
 );
 
-// ─── 20. User Settings (for notification preferences) ───────────────
+// ─── 20. API Keys ───────────────────────────────────────────────────
+export const apiKeys = pgTable(
+    'api_keys',
+    {
+        id: uuid('id').defaultRandom().primaryKey(),
+        orgId: uuid('org_id')
+            .notNull()
+            .references(() => organizations.id, { onDelete: 'cascade' }),
+        name: varchar('name', { length: 100 }).notNull(),
+        key: text('key').notNull().unique(), // hashed key
+        partialKey: varchar('partial_key', { length: 20 }).notNull(), // for display (e.g., "fd_sk_abc...xyz")
+        createdBy: uuid('created_by')
+            .notNull()
+            .references(() => users.id),
+        revoked: boolean('revoked').default(false),
+        revokedAt: timestamp('revoked_at', { mode: 'date' }),
+        lastUsedAt: timestamp('last_used_at', { mode: 'date' }),
+        createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+    },
+    (table) => ({
+        orgIdIdx: index('api_keys_org_id_idx').on(table.orgId),
+        keyIdx: uniqueIndex('api_keys_key_idx').on(table.key),
+    })
+);
+
+// ─── 20b. User Settings (for notification preferences) ───────────────
 export const userSettings = pgTable(
     'user_settings',
     {

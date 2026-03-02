@@ -45,10 +45,11 @@ import {
 } from '@flowdesk/types';
 import { eq, and, desc, asc, ilike, or, sql, inArray, gte, isNull } from 'drizzle-orm';
 import { broadcast } from './lib/socket';
+import { broadcastTask, broadcastComment, broadcastDocument } from './lib/socket-broadcast';
 import { randomUUID } from 'crypto';
 import { billingRouter } from './routers/billing';
 import { attachmentsRouter } from './routers/attachments';
-import { checkMemberLimit, checkProjectLimit } from './lib/plan-limits';
+import { checkMemberLimit, checkProjectLimit, checkActivityHistoryLimit } from './lib/plan-limits';
 import { sendInviteEmail } from './lib/email';
 
 // ─── Activity Logging Helper ─────────────────────────────────────────
@@ -560,6 +561,9 @@ export const taskRouter = router({
                 metadata: { title: task.title, status: task.status },
             });
 
+            // Broadcast to project room for real-time updates
+            await broadcastTask.created(task, task.projectId);
+
             // Notify assignee
             if (input.assigneeId && input.assigneeId !== ctx.user.id) {
                 await createNotification(ctx.db, broadcast, {
@@ -573,6 +577,19 @@ export const taskRouter = router({
             }
 
             return task;
+        }),
+
+    get: createOrgProcedure()
+        .input(z.object({ id: z.string().uuid() }))
+        .query(async ({ ctx, input }) => {
+            return ctx.db.query.tasks.findFirst({
+                where: eq(tasks.id, input.id),
+                with: {
+                    assignee: true,
+                    labels: { with: { label: true } },
+                    project: true,
+                },
+            });
         }),
 
     listByProject: createOrgProcedure()
@@ -678,8 +695,8 @@ export const taskRouter = router({
                 });
             }
 
-            // Broadcast task update to org room (for board updates)
-            await broadcast('TASK_UPDATED', updated, `org:${ctx.orgId}`);
+            // Broadcast task update to project room for real-time updates
+            await broadcastTask.updated(updated, updated.projectId);
 
             return updated;
         }),
@@ -716,6 +733,9 @@ export const taskRouter = router({
                     title: moved.title
                 },
             });
+
+            // Broadcast task move to project room for real-time Kanban updates
+            await broadcastTask.moved(moved.id, currentTask?.status || '', moved.status, moved.projectId);
 
             return moved;
         }),
@@ -760,6 +780,9 @@ export const taskRouter = router({
                     projectId: deletedTask.projectId,
                     metadata: { title: deletedTask.title },
                 });
+
+                // Broadcast task deletion to project room
+                await broadcastTask.deleted(input.id, deletedTask.projectId);
             }
 
             return { success: true };
@@ -818,6 +841,9 @@ export const commentRouter = router({
                     payload: { taskId: task.id, projectId: task.projectId, commentId: comment.id },
                 });
             }
+
+            // Broadcast comment to task room for real-time updates
+            await broadcastComment.added(comment, input.taskId);
 
             return comment;
         }),
@@ -1264,6 +1290,14 @@ export const activityRouter = router({
             if (input.taskId) conditions.push(eq(activityLog.taskId, input.taskId));
             if (input.documentId) conditions.push(eq(activityLog.documentId, input.documentId));
 
+            // Apply plan-based activity history limit
+            const historyDays = await checkActivityHistoryLimit(ctx.db, input.orgId);
+            if (historyDays > 0) {
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - historyDays);
+                conditions.push(gte(activityLog.createdAt, cutoffDate));
+            }
+
             return ctx.db.query.activityLog.findMany({
                 where: and(...conditions),
                 with: { user: true, project: true, task: true, document: true },
@@ -1275,8 +1309,17 @@ export const activityRouter = router({
     getByTask: protectedProcedure
         .input(z.object({ orgId: z.string().uuid(), taskId: z.string().uuid() }))
         .query(async ({ ctx, input }) => {
+            // Apply plan-based activity history limit
+            const historyDays = await checkActivityHistoryLimit(ctx.db, input.orgId);
+            const conditions = [eq(activityLog.orgId, input.orgId), eq(activityLog.taskId, input.taskId)];
+            if (historyDays > 0) {
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - historyDays);
+                conditions.push(gte(activityLog.createdAt, cutoffDate));
+            }
+
             return ctx.db.query.activityLog.findMany({
-                where: and(eq(activityLog.orgId, input.orgId), eq(activityLog.taskId, input.taskId)),
+                where: and(...conditions),
                 with: { user: true, task: true },
                 orderBy: [desc(activityLog.createdAt)],
                 limit: 50,
@@ -1286,8 +1329,17 @@ export const activityRouter = router({
     getByProject: protectedProcedure
         .input(z.object({ orgId: z.string().uuid(), projectId: z.string().uuid() }))
         .query(async ({ ctx, input }) => {
+            // Apply plan-based activity history limit
+            const historyDays = await checkActivityHistoryLimit(ctx.db, input.orgId);
+            const conditions = [eq(activityLog.orgId, input.orgId), eq(activityLog.projectId, input.projectId)];
+            if (historyDays > 0) {
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - historyDays);
+                conditions.push(gte(activityLog.createdAt, cutoffDate));
+            }
+
             return ctx.db.query.activityLog.findMany({
-                where: and(eq(activityLog.orgId, input.orgId), eq(activityLog.projectId, input.projectId)),
+                where: and(...conditions),
                 with: { user: true, task: true },
                 orderBy: [desc(activityLog.createdAt)],
                 limit: 50,
@@ -1297,8 +1349,17 @@ export const activityRouter = router({
     getByDocument: protectedProcedure
         .input(z.object({ orgId: z.string().uuid(), documentId: z.string().uuid() }))
         .query(async ({ ctx, input }) => {
+            // Apply plan-based activity history limit
+            const historyDays = await checkActivityHistoryLimit(ctx.db, input.orgId);
+            const conditions = [eq(activityLog.orgId, input.orgId), eq(activityLog.documentId, input.documentId)];
+            if (historyDays > 0) {
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - historyDays);
+                conditions.push(gte(activityLog.createdAt, cutoffDate));
+            }
+
             return ctx.db.query.activityLog.findMany({
-                where: and(eq(activityLog.orgId, input.orgId), eq(activityLog.documentId, input.documentId)),
+                where: and(...conditions),
                 with: { user: true },
                 orderBy: [desc(activityLog.createdAt)],
                 limit: 50,
@@ -1401,68 +1462,53 @@ export const attachmentRouter = router({
 // ─── Analytics Router ───────────────────────────────────────────────
 export const analyticsRouter = router({
     getDashboardStats: createOrgProcedure()
-        .input(z.object({ orgId: z.string().uuid(), days: z.number().int().min(7).max(90).optional() }))
+        .input(z.object({ orgId: z.string().uuid(), days: z.number().int().min(7).max(365).optional() }))
         .query(async ({ ctx, input }) => {
             const days = input.days || 30;
             const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-            // Task status distribution
-            const taskStatusDistribution = await ctx.db
-                .select({
-                    status: tasks.status,
-                    count: sql<number>`count(*)::int`,
-                })
+            // Total tasks
+            const totalTasksResult = await ctx.db
+                .select({ count: sql<number>`count(*)::int` })
                 .from(tasks)
-                .where(eq(tasks.orgId, input.orgId))
-                .groupBy(tasks.status);
+                .where(eq(tasks.orgId, input.orgId));
 
-            // Tasks created per day
-            const tasksCreatedPerDay = await ctx.db
-                .select({
-                    date: sql<string>`date_trunc('day', ${tasks.createdAt})`,
-                    count: sql<number>`count(*)::int`,
-                })
+            // Completed tasks
+            const completedTasksResult = await ctx.db
+                .select({ count: sql<number>`count(*)::int` })
+                .from(tasks)
+                .where(and(eq(tasks.orgId, input.orgId), eq(tasks.status, 'DONE')));
+
+            // In progress tasks
+            const inProgressResult = await ctx.db
+                .select({ count: sql<number>`count(*)::int` })
+                .from(tasks)
+                .where(and(eq(tasks.orgId, input.orgId), eq(tasks.status, 'IN_PROGRESS')));
+
+            // Overdue tasks
+            const overdueResult = await ctx.db
+                .select({ count: sql<number>`count(*)::int` })
                 .from(tasks)
                 .where(
                     and(
                         eq(tasks.orgId, input.orgId),
-                        gte(tasks.createdAt, since)
+                        eq(tasks.status, 'IN_PROGRESS'),
+                        sql`${tasks.dueDate} < NOW()`
                     )
-                )
-                .groupBy(sql`date_trunc('day', ${tasks.createdAt})`)
-                .orderBy(sql`date_trunc('day', ${tasks.createdAt})`);
-
-            // Activity by user
-            const activityByUser = await ctx.db
-                .select({
-                    userId: activityLog.userId,
-                    userName: users.name,
-                    userEmail: users.email,
-                    activityCount: sql<number>`count(*)::int`,
-                })
-                .from(activityLog)
-                .innerJoin(users, eq(users.id, activityLog.userId))
-                .where(
-                    and(
-                        eq(activityLog.orgId, input.orgId),
-                        gte(activityLog.createdAt, since)
-                    )
-                )
-                .groupBy(users.id, users.name, users.email, activityLog.userId)
-                .orderBy(sql`count(*) DESC`)
-                .limit(10);
+                );
 
             return {
-                taskStatusDistribution,
-                tasksCreatedPerDay,
-                activityByUser,
+                totalTasks: totalTasksResult[0]?.count || 0,
+                completedTasks: completedTasksResult[0]?.count || 0,
+                inProgressTasks: inProgressResult[0]?.count || 0,
+                overdueTasks: overdueResult[0]?.count || 0,
             };
         }),
 
     getVelocity: createOrgProcedure()
-        .input(z.object({ orgId: z.string().uuid(), days: z.number().int().min(7).max(90).optional() }))
+        .input(z.object({ orgId: z.string().uuid(), days: z.number().int().min(7).max(365).optional() }))
         .query(async ({ ctx, input }) => {
-            const days = input.days || 28;
+            const days = input.days || 30;
             const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
             const result = await ctx.db
@@ -1481,7 +1527,11 @@ export const analyticsRouter = router({
                 .groupBy(sql`to_char(${tasks.completedAt}, 'IYYY-IW')`)
                 .orderBy(sql`to_char(${tasks.completedAt}, 'IYYY-IW')`);
 
-            return result;
+            // Format for charts - ensure consistent structure
+            return result.map(r => ({
+                week: `Week ${r.week.split('-')[1]}`,
+                completed: r.count,
+            }));
         }),
 
     getTaskCompletion: createOrgProcedure()
@@ -1521,12 +1571,11 @@ export const analyticsRouter = router({
     getMemberActivity: createOrgProcedure()
         .input(z.object({ orgId: z.string().uuid(), days: z.number().int().optional() }))
         .query(async ({ ctx, input }) => {
-            const days = input.days || 28;
+            const days = input.days || 30;
             const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
             const result = await ctx.db
                 .select({
-                    userId: activityLog.userId,
                     date: sql<string>`to_char(${activityLog.createdAt}, 'YYYY-MM-DD')`,
                     count: sql<number>`count(*)::int`,
                 })
@@ -1537,10 +1586,14 @@ export const analyticsRouter = router({
                         gte(activityLog.createdAt, since)
                     )
                 )
-                .groupBy(activityLog.userId, sql`to_char(${activityLog.createdAt}, 'YYYY-MM-DD')`)
+                .groupBy(sql`to_char(${activityLog.createdAt}, 'YYYY-MM-DD')`)
                 .orderBy(sql`to_char(${activityLog.createdAt}, 'YYYY-MM-DD')`);
 
-            return result;
+            // Format for charts
+            return result.map(r => ({
+                date: r.date,
+                count: r.count,
+            }));
         }),
 });
 

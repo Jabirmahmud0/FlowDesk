@@ -2,172 +2,174 @@
 
 import { trpc } from '@/lib/trpc';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { Loader2 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { CheckCircle2, Clock, AlertCircle, TrendingUp } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface OverviewChartsProps {
     orgId: string;
 }
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
-
 export function OverviewCharts({ orgId }: OverviewChartsProps) {
-    const { data: analytics, isLoading } = trpc.analytics.getDashboardStats.useQuery({ orgId, days: 30 });
+    const { data: stats } = trpc.analytics.getDashboardStats.useQuery({ orgId, days: 30 }, {
+        staleTime: 5 * 60 * 1000,
+        refetchOnWindowFocus: false,
+    });
 
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center h-[400px]">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-        );
-    }
+    const { data: completion } = trpc.analytics.getTaskCompletion.useQuery({ orgId }, {
+        staleTime: 5 * 60 * 1000,
+        refetchOnWindowFocus: false,
+    });
 
     // Prepare data for task status distribution (Pie Chart)
-    const taskStatusData = analytics?.taskStatusDistribution.map((item: any) => ({
-        name: item.status.replace('_', ' '),
-        value: item.count,
-    })) || [];
+    const statusData = [
+        { name: 'Completed', value: stats?.completedTasks || 0, color: 'hsl(142, 76%, 36%)' },
+        { name: 'In Progress', value: stats?.inProgressTasks || 0, color: 'hsl(217, 91%, 60%)' },
+        { name: 'Overdue', value: stats?.overdueTasks || 0, color: 'hsl(0, 84%, 60%)' },
+    ].filter(s => s.value > 0);
 
-    // Prepare data for tasks created per day (Bar Chart)
-    const tasksCreatedData = analytics?.tasksCreatedPerDay.map((item: any) => ({
-        date: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        tasks: item.count,
-    })) || [];
-
-    // Prepare data for activity by user (Bar Chart)
-    const activityByUserData = analytics?.activityByUser.slice(0, 5).map((item: any) => ({
-        user: item.userName || item.userEmail?.split('@')[0] || 'Unknown',
-        activities: item.activityCount,
-    })) || [];
+    // Simple activity data
+    const activityData = [
+        { name: 'Total', value: stats?.totalTasks || 0 },
+        { name: 'Done', value: stats?.completedTasks || 0 },
+    ];
 
     return (
-        <div className="grid gap-4 md:grid-cols-2">
-            {/* Task Status Distribution - Pie Chart */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {/* Stats Cards */}
             <Card>
-                <CardHeader>
-                    <CardTitle className="text-sm font-medium">Task Status Distribution</CardTitle>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                        Completed
+                    </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="h-[250px]">
-                        {taskStatusData.length > 0 ? (
+                    <div className="text-2xl font-bold">{stats?.completedTasks || 0}</div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                        {completion?.completionRate || 0}% completion rate
+                    </p>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-blue-500" />
+                        In Progress
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{stats?.inProgressTasks || 0}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Active tasks</p>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 text-red-500" />
+                        Overdue
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{stats?.overdueTasks || 0}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Needs attention</p>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4 text-purple-500" />
+                        Total
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{stats?.totalTasks || 0}</div>
+                    <p className="text-xs text-muted-foreground mt-1">All tasks</p>
+                </CardContent>
+            </Card>
+
+            {/* Task Status Pie Chart */}
+            {statusData.length > 0 && (
+                <Card className="md:col-span-2">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium">Task Status Overview</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="h-[200px]">
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
                                     <Pie
-                                        data={taskStatusData}
+                                        data={statusData}
                                         cx="50%"
                                         cy="50%"
                                         labelLine={false}
-                                        label={({ name, percent }) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
+                                        innerRadius={50}
                                         outerRadius={80}
-                                        fill="#8884d8"
                                         dataKey="value"
+                                        paddingAngle={2}
                                     >
-                                        {taskStatusData.map((entry: any, index: number) => (
-                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        {statusData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.color} />
                                         ))}
                                     </Pie>
-                                    <Tooltip />
+                                    <Tooltip
+                                        contentStyle={{
+                                            backgroundColor: 'hsl(var(--background))',
+                                            border: '1px solid hsl(var(--border))',
+                                            borderRadius: '8px',
+                                        }}
+                                    />
                                 </PieChart>
                             </ResponsiveContainer>
-                        ) : (
-                            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                                No task data available
-                            </div>
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
+                        </div>
+                        <div className="flex justify-center gap-4 mt-4">
+                            {statusData.map((item) => (
+                                <div key={item.name} className="flex items-center gap-2">
+                                    <div
+                                        className="w-3 h-3 rounded-full"
+                                        style={{ backgroundColor: item.color }}
+                                    />
+                                    <span className="text-xs text-muted-foreground">{item.name}</span>
+                                    <span className="text-xs font-medium">{item.value}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
-            {/* Tasks Created Per Day - Bar Chart */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-sm font-medium">Tasks Created (Last 30 Days)</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="h-[250px]">
-                        {tasksCreatedData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={tasksCreatedData}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                    <XAxis 
-                                        dataKey="date" 
-                                        fontSize={12} 
-                                        tickLine={false} 
-                                        axisLine={false} 
-                                    />
-                                    <YAxis 
-                                        fontSize={12} 
-                                        tickLine={false} 
-                                        axisLine={false} 
-                                        tickFormatter={(value) => `${value}`}
-                                    />
-                                    <Tooltip 
-                                        contentStyle={{ 
-                                            borderRadius: '8px', 
-                                            border: 'none',
-                                            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
-                                        }} 
-                                    />
-                                    <Bar 
-                                        dataKey="tasks" 
-                                        fill="#0088FE" 
-                                        radius={[4, 4, 0, 0]} 
-                                    />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                                No tasks created recently
-                            </div>
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* Activity by User - Bar Chart */}
+            {/* Activity Bar Chart */}
             <Card className="md:col-span-2">
-                <CardHeader>
-                    <CardTitle className="text-sm font-medium">Top Active Members (Last 30 Days)</CardTitle>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Task Overview</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="h-[200px]">
-                        {activityByUserData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={activityByUserData} layout="vertical">
-                                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                                    <XAxis 
-                                        type="number" 
-                                        fontSize={12} 
-                                        tickLine={false} 
-                                        axisLine={false} 
-                                    />
-                                    <YAxis 
-                                        dataKey="user" 
-                                        type="category" 
-                                        fontSize={12} 
-                                        tickLine={false} 
-                                        axisLine={false}
-                                        width={100}
-                                    />
-                                    <Tooltip 
-                                        contentStyle={{ 
-                                            borderRadius: '8px', 
-                                            border: 'none',
-                                            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
-                                        }} 
-                                    />
-                                    <Bar 
-                                        dataKey="activities" 
-                                        fill="#8884D8" 
-                                        radius={[0, 4, 4, 0]} 
-                                    />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                                No activity data available
-                            </div>
-                        )}
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={activityData}>
+                                <XAxis
+                                    dataKey="name"
+                                    fontSize={12}
+                                    tickLine={false}
+                                    axisLine={false}
+                                />
+                                <Tooltip
+                                    contentStyle={{
+                                        backgroundColor: 'hsl(var(--background))',
+                                        border: '1px solid hsl(var(--border))',
+                                        borderRadius: '8px',
+                                    }}
+                                />
+                                <Bar
+                                    dataKey="value"
+                                    fill="hsl(var(--primary))"
+                                    radius={[4, 4, 0, 0]}
+                                />
+                            </BarChart>
+                        </ResponsiveContainer>
                     </div>
                 </CardContent>
             </Card>

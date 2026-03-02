@@ -21,7 +21,8 @@ async function runMigration() {
     const sql = neon(databaseUrl);
 
     // Read the migration file
-    const migrationPath = path.join(__dirname, 'drizzle/0004_add_search_vectors.sql');
+    const migrationFile = process.argv[2] || '0004_add_search_vectors.sql';
+    const migrationPath = path.join(__dirname, `drizzle/${migrationFile}`);
     const migrationSql = fs.readFileSync(migrationPath, 'utf-8');
 
     // Remove comments and split by semicolons
@@ -35,7 +36,22 @@ async function runMigration() {
 
     console.log(`Executing ${statements.length} SQL statements...`);
 
-    // First pass: Add columns
+    // First pass: Create tables
+    console.log('\n--- Creating tables ---');
+    const tableStatements = statements.filter(s => s.startsWith('CREATE TABLE'));
+    for (const statement of tableStatements) {
+        try {
+            await sql(statement);
+            console.log(`✓ ${statement.substring(0, 70)}...`);
+        } catch (error: any) {
+            console.error(`✗ Failed: ${error.message}`);
+        }
+    }
+
+    // Small delay to ensure tables are created
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Second pass: Add columns
     console.log('\n--- Adding columns ---');
     const columnStatements = statements.filter(s => s.startsWith('ALTER TABLE'));
     for (const statement of columnStatements) {
@@ -50,7 +66,7 @@ async function runMigration() {
     // Small delay to ensure columns are created
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    // Second pass: Create indexes
+    // Third pass: Create indexes
     console.log('\n--- Creating indexes ---');
     const indexStatements = statements.filter(s => s.startsWith('CREATE INDEX'));
     for (const statement of indexStatements) {

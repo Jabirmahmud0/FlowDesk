@@ -17,8 +17,7 @@ import { useState, useEffect } from 'react';
 import { KanbanColumn } from './column';
 import { TaskCard } from './card';
 import { trpc } from '@/lib/trpc';
-// import { Button } from '@/components/ui/button';
-// import { Plus } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
 
 type Task = {
     id: string;
@@ -27,34 +26,58 @@ type Task = {
     status: 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE';
     priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
     projectId: string;
-    // ... other fields
+    orgId?: string;
+    assignee?: any | null;
+    dueDate?: Date | null;
 };
 
 type Props = {
     projectId: string;
+    orgId: string;
     initialTasks: Task[];
     onTaskClick?: (task: Task) => void;
 };
 
 const COLUMNS = [
-    { id: 'TODO', title: 'To Do' },
-    { id: 'IN_PROGRESS', title: 'In Progress' },
-    { id: 'IN_REVIEW', title: 'In Review' },
-    { id: 'DONE', title: 'Done' },
+    { id: 'TODO', title: 'To Do', color: 'bg-slate-500' },
+    { id: 'IN_PROGRESS', title: 'In Progress', color: 'bg-blue-500' },
+    { id: 'IN_REVIEW', title: 'In Review', color: 'bg-amber-500' },
+    { id: 'DONE', title: 'Done', color: 'bg-emerald-500' },
 ] as const;
 
-export function KanbanBoard({ projectId, initialTasks, onTaskClick }: Props) {
+export function KanbanBoard({ projectId, orgId, initialTasks, onTaskClick }: Props) {
     const [tasks, setTasks] = useState<Task[]>(initialTasks);
     const [activeTask, setActiveTask] = useState<Task | null>(null);
+    const [originalStatus, setOriginalStatus] = useState<string | null>(null);
 
     const utils = trpc.useUtils();
+    const { toast } = useToast();
+    
     const updateTaskMutation = trpc.task.update.useMutation({
-        onSuccess: () => {
+        onSuccess: (data, variables) => {
             utils.task.listByProject.invalidate({ projectId });
-        }
+            const statusLabels: Record<string, string> = {
+                TODO: 'To Do',
+                IN_PROGRESS: 'In Progress',
+                IN_REVIEW: 'In Review',
+                DONE: 'Done',
+            };
+            toast({
+                title: 'Task moved',
+                description: `Task moved to ${statusLabels[variables.status] || variables.status}`,
+                duration: 2000,
+            });
+        },
+        onError: () => {
+            toast({
+                title: 'Error',
+                description: 'Failed to move task. Please try again.',
+                variant: 'destructive',
+                duration: 3000,
+            });
+        },
     });
 
-    // Sync with server state if re-fetched
     useEffect(() => {
         setTasks(initialTasks);
     }, [initialTasks]);
@@ -62,7 +85,7 @@ export function KanbanBoard({ projectId, initialTasks, onTaskClick }: Props) {
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: {
-                distance: 8, // Prevent accidental drags
+                distance: 8,
             },
         }),
         useSensor(KeyboardSensor, {
@@ -73,7 +96,10 @@ export function KanbanBoard({ projectId, initialTasks, onTaskClick }: Props) {
     const handleDragStart = (event: DragStartEvent) => {
         const { active } = event;
         const task = tasks.find((t) => t.id === active.id);
-        if (task) setActiveTask(task);
+        if (task) {
+            setActiveTask(task);
+            setOriginalStatus(task.status);
+        }
     };
 
     const handleDragOver = (event: DragOverEvent) => {
@@ -83,14 +109,11 @@ export function KanbanBoard({ projectId, initialTasks, onTaskClick }: Props) {
         const activeId = active.id;
         const overId = over.id;
 
-        // Find the containers
         const activeTask = tasks.find((t) => t.id === activeId);
-        const overTask = tasks.find((t) => t.id === overId);
-
         if (!activeTask) return;
 
-        // If over a column
         const overColumnId = COLUMNS.find(c => c.id === overId)?.id;
+        const overTask = tasks.find(t => t.id === overId);
 
         if (overColumnId && activeTask.status !== overColumnId) {
             setTasks((prev) => {
@@ -99,7 +122,6 @@ export function KanbanBoard({ projectId, initialTasks, onTaskClick }: Props) {
                 );
             });
         } else if (overTask && activeTask.status !== overTask.status) {
-            // Dragging over a task in a different column
             setTasks((prev) => {
                 return prev.map(t =>
                     t.id === activeId ? { ...t, status: overTask.status } : t
@@ -117,30 +139,32 @@ export function KanbanBoard({ projectId, initialTasks, onTaskClick }: Props) {
         const activeId = active.id as string;
         const overId = over.id as string;
 
-        const activeTask = tasks.find((t) => t.id === activeId);
-        if (!activeTask) return;
+        // Get the current task from state (it may have been updated in dragOver)
+        const currentTask = tasks.find((t) => t.id === activeId);
+        if (!currentTask) return;
 
-        let newStatus = activeTask.status;
+        let newStatus = currentTask.status;
 
-        // If dropped on a column
         const overColumn = COLUMNS.find(c => c.id === overId);
         if (overColumn) {
             newStatus = overColumn.id;
         } else {
-            // If dropped on another task
             const overTask = tasks.find(t => t.id === overId);
             if (overTask) {
                 newStatus = overTask.status;
             }
         }
 
-        if (activeTask.status !== newStatus) {
-            // Optimistic update was mostly handled in DragOver, but finalize here
+        // Compare with original status to see if it actually changed
+        if (originalStatus && currentTask.status !== originalStatus) {
             updateTaskMutation.mutate({
                 id: activeId,
-                status: newStatus
+                status: newStatus as any,
+                orgId,
             });
         }
+
+        setOriginalStatus(null);
     };
 
     return (
@@ -152,20 +176,25 @@ export function KanbanBoard({ projectId, initialTasks, onTaskClick }: Props) {
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}
             >
-                <div className="flex h-full gap-4 overflow-x-auto pb-4">
+                <div className="flex h-full gap-4 overflow-x-auto">
                     {COLUMNS.map((col) => (
                         <KanbanColumn
                             key={col.id}
                             id={col.id}
                             title={col.title}
+                            color={col.color}
                             tasks={tasks.filter((t) => t.status === col.id)}
                             onTaskClick={onTaskClick!}
                         />
                     ))}
                 </div>
 
-                <DragOverlay>
-                    {activeTask ? <TaskCard task={activeTask} onClick={() => { }} /> : null}
+                <DragOverlay dropAnimation={null}>
+                    {activeTask ? (
+                        <div className="rotate-3 scale-105 shadow-2xl">
+                            <TaskCard task={activeTask} onClick={() => { }} />
+                        </div>
+                    ) : null}
                 </DragOverlay>
             </DndContext>
         </div>

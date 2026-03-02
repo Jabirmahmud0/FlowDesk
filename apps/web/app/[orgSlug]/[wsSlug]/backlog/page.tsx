@@ -1,13 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import { useOrg } from '@/hooks/use-org';
 import { useWorkspace } from '@/hooks/use-workspace';
-import { Button } from '@/components/ui/button';
-import { Plus, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { TaskModal } from '@/components/tasks/task-modal';
 import { trpc } from '@/lib/trpc';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import {
     Select,
     SelectContent,
@@ -15,460 +15,330 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { TaskDetailPanel } from '@/components/tasks/task-detail-panel';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Plus, MoreHorizontal, Pencil, Trash2, Check, X } from 'lucide-react';
+import { TaskModal } from '@/components/tasks/task-modal';
 import { cn } from '@/lib/utils';
 
-type SortField = 'title' | 'status' | 'priority' | 'assignee';
-type SortDirection = 'asc' | 'desc';
-
-const PRIORITY_ORDER: Record<string, number> = {
-    URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1, NONE: 0,
+const STATUS_COLORS: Record<string, string> = {
+    TODO: 'bg-slate-500',
+    IN_PROGRESS: 'bg-blue-500',
+    IN_REVIEW: 'bg-amber-500',
+    DONE: 'bg-emerald-500',
 };
 
-const STATUS_ORDER: Record<string, number> = {
-    TODO: 0, IN_PROGRESS: 1, IN_REVIEW: 2, DONE: 3,
+const PRIORITY_COLORS: Record<string, string> = {
+    URGENT: 'text-red-500',
+    HIGH: 'text-orange-500',
+    MEDIUM: 'text-yellow-500',
+    LOW: 'text-blue-500',
+    NONE: 'text-muted-foreground',
 };
 
-// ─── Inline Editable Title ─────────────────────────────────────────
-function InlineTitle({
-    value,
-    onSave,
-}: {
-    value: string;
-    onSave: (newTitle: string) => void;
-}) {
-    const [editing, setEditing] = useState(false);
-    const [draft, setDraft] = useState(value);
-    const inputRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-        if (editing) inputRef.current?.focus();
-    }, [editing]);
-
-    useEffect(() => {
-        setDraft(value);
-    }, [value]);
-
-    const commit = useCallback(() => {
-        const trimmed = draft.trim();
-        if (trimmed && trimmed !== value) {
-            onSave(trimmed);
-        } else {
-            setDraft(value);
-        }
-        setEditing(false);
-    }, [draft, value, onSave]);
-
-    if (editing) {
-        return (
-            <input
-                ref={inputRef}
-                className="w-full bg-transparent border border-primary/40 rounded px-1.5 py-0.5 text-sm font-medium outline-none focus:ring-1 focus:ring-primary/50"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onBlur={commit}
-                onKeyDown={(e) => {
-                    if (e.key === 'Enter') commit();
-                    if (e.key === 'Escape') {
-                        setDraft(value);
-                        setEditing(false);
-                    }
-                }}
-                onClick={(e) => e.stopPropagation()}
-            />
-        );
-    }
-
-    return (
-        <span
-            className="font-medium truncate cursor-text hover:bg-muted/80 rounded px-1.5 py-0.5 -mx-1.5 transition-colors"
-            onDoubleClick={(e) => {
-                e.stopPropagation();
-                setEditing(true);
-            }}
-            title="Double-click to edit"
-        >
-            {value}
-        </span>
-    );
-}
-
-// ─── Inline Status Dropdown ────────────────────────────────────────
-function InlineStatus({
-    value,
-    onSave,
-}: {
-    value: string;
-    onSave: (newStatus: string) => void;
-}) {
-    return (
-        <Select
-            value={value}
-            onValueChange={(v) => {
-                if (v !== value) onSave(v);
-            }}
-        >
-            <SelectTrigger
-                className={cn(
-                    'h-7 text-xs border-none shadow-none px-2 w-auto min-w-0 gap-1',
-                    value === 'DONE' && 'text-green-500',
-                    value === 'IN_PROGRESS' && 'text-blue-500',
-                    value === 'IN_REVIEW' && 'text-amber-500',
-                    value === 'TODO' && 'text-slate-500',
-                )}
-                onClick={(e) => e.stopPropagation()}
-            >
-                <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-                <SelectItem value="TODO">Todo</SelectItem>
-                <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                <SelectItem value="IN_REVIEW">In Review</SelectItem>
-                <SelectItem value="DONE">Done</SelectItem>
-            </SelectContent>
-        </Select>
-    );
-}
-
-// ─── Inline Priority Dropdown ──────────────────────────────────────
-function InlinePriority({
-    value,
-    onSave,
-}: {
-    value: string;
-    onSave: (newPriority: string) => void;
-}) {
-    return (
-        <Select
-            value={value}
-            onValueChange={(v) => {
-                if (v !== value) onSave(v);
-            }}
-        >
-            <SelectTrigger
-                className={cn(
-                    'h-7 text-xs border-none shadow-none px-2 w-auto min-w-0 gap-1',
-                    value === 'URGENT' && 'text-red-500',
-                    value === 'HIGH' && 'text-orange-500',
-                    value === 'MEDIUM' && 'text-yellow-600',
-                    value === 'LOW' && 'text-blue-500',
-                )}
-                onClick={(e) => e.stopPropagation()}
-            >
-                <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-                <SelectItem value="LOW">Low</SelectItem>
-                <SelectItem value="MEDIUM">Medium</SelectItem>
-                <SelectItem value="HIGH">High</SelectItem>
-                <SelectItem value="URGENT">Urgent</SelectItem>
-            </SelectContent>
-        </Select>
-    );
-}
-
-// ─── Sort Header ───────────────────────────────────────────────────
-function SortHeader({
-    label,
-    field,
-    currentField,
-    currentDir,
-    onSort,
-    className,
-}: {
-    label: string;
-    field: SortField;
-    currentField: SortField | null;
-    currentDir: SortDirection;
-    onSort: (field: SortField) => void;
-    className?: string;
-}) {
-    const active = currentField === field;
-    return (
-        <button
-            className={cn(
-                'flex items-center gap-1 text-sm font-medium hover:text-foreground transition-colors select-none',
-                active ? 'text-foreground' : 'text-muted-foreground',
-                className,
-            )}
-            onClick={() => onSort(field)}
-        >
-            {label}
-            {active ? (
-                currentDir === 'asc' ? (
-                    <ArrowUp className="h-3.5 w-3.5" />
-                ) : (
-                    <ArrowDown className="h-3.5 w-3.5" />
-                )
-            ) : (
-                <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
-            )}
-        </button>
-    );
-}
-
-// ─── Main Page ─────────────────────────────────────────────────────
 export default function BacklogPage() {
     const { org } = useOrg();
-    const { workspace, isLoading } = useWorkspace();
+    const { workspace } = useWorkspace();
     const [isModalOpen, setIsModalOpen] = useState(false);
-
-    // View/Edit state
-    const [viewingTask, setViewingTask] = useState<any | null>(null);
-    const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [editingTask, setEditingTask] = useState<any | null>(null);
-
-    // Filter states
-    const [searchQuery, setSearchQuery] = useState('');
-    const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
-    const [statusFilter, setStatusFilter] = useState<string>('ALL');
-
-    // Sort states
-    const [sortField, setSortField] = useState<SortField | null>(null);
-    const [sortDir, setSortDir] = useState<SortDirection>('asc');
+    const [inlineEdit, setInlineEdit] = useState<{ id: string; field: string; value: string } | null>(null);
 
     const firstProjectId = workspace?.projects[0]?.id;
-    const utils = trpc.useUtils();
 
-    const { data: tasks } = trpc.task.listByProject.useQuery(
+    const { data: tasks, isLoading, error } = trpc.task.listByProject.useQuery(
         { projectId: firstProjectId!, orgId: org?.id! },
-        { enabled: !!firstProjectId && !!org?.id }
+        { 
+            enabled: !!firstProjectId && !!org?.id,
+            retry: 2,
+        }
     );
 
     const updateTask = trpc.task.update.useMutation({
         onSuccess: () => {
-            utils.task.listByProject.invalidate();
+            utils.task.listByProject.invalidate({ projectId: firstProjectId });
+            setInlineEdit(null);
         },
     });
 
-    // Filter + sort logic
-    const processedTasks = useMemo(() => {
-        let result = tasks?.filter((task: any) => {
-            const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase());
-            const matchesPriority = priorityFilter === 'ALL' || task.priority === priorityFilter;
-            const matchesStatus = statusFilter === 'ALL' || task.status === statusFilter;
-            return matchesSearch && matchesPriority && matchesStatus;
-        }) || [];
-
-        if (sortField) {
-            result = [...result].sort((a: any, b: any) => {
-                let cmp = 0;
-                switch (sortField) {
-                    case 'title':
-                        cmp = (a.title || '').localeCompare(b.title || '');
-                        break;
-                    case 'status':
-                        cmp = (STATUS_ORDER[a.status] ?? 0) - (STATUS_ORDER[b.status] ?? 0);
-                        break;
-                    case 'priority':
-                        cmp = (PRIORITY_ORDER[a.priority] ?? 0) - (PRIORITY_ORDER[b.priority] ?? 0);
-                        break;
-                    case 'assignee': {
-                        const nameA = a.assignee?.name || a.assignee?.email || '';
-                        const nameB = b.assignee?.name || b.assignee?.email || '';
-                        cmp = nameA.localeCompare(nameB);
-                        break;
-                    }
-                }
-                return sortDir === 'desc' ? -cmp : cmp;
-            });
-        }
-
-        return result;
-    }, [tasks, searchQuery, priorityFilter, statusFilter, sortField, sortDir]);
-
-    const handleSort = useCallback((field: SortField) => {
-        if (sortField === field) {
-            setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-        } else {
-            setSortField(field);
-            setSortDir('asc');
-        }
-    }, [sortField]);
-
-    const handleTaskClick = (task: any) => {
-        setViewingTask(task);
-        setIsDetailOpen(true);
-    };
-
-    const handleEditTask = (task: any) => {
-        setEditingTask(task);
-        setIsModalOpen(true);
-    };
-
-    const handleModalClose = (open: boolean) => {
-        setIsModalOpen(open);
-        if (!open) setEditingTask(null);
-    };
-
-    const handleInlineUpdate = useCallback(
-        (taskId: string, data: Record<string, any>) => {
-            updateTask.mutate({ id: taskId, ...data });
+    const deleteTask = trpc.task.delete.useMutation({
+        onSuccess: () => {
+            utils.task.listByProject.invalidate({ projectId: firstProjectId });
         },
-        [updateTask]
-    );
+    });
 
-    if (isLoading) return <div className="p-8">Loading...</div>;
-    if (!workspace) return <div className="p-8">Workspace not found</div>;
-    if (!firstProjectId) return (
-        <div className="p-8 text-center">
-            <h2 className="text-xl font-semibold mb-2">No projects found</h2>
-            <p className="text-muted-foreground">Create a project to start adding tasks.</p>
-        </div>
-    );
+    const utils = trpc.useUtils();
+
+    // Handle errors
+    if (error) {
+        return (
+            <div className="flex items-center justify-center h-full">
+                <Card className="p-8 text-center max-w-md">
+                    <div className="mb-4">
+                        <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+                            <X className="h-8 w-8 text-red-500" />
+                        </div>
+                    </div>
+                    <h2 className="text-xl font-semibold mb-2">Failed to load</h2>
+                    <p className="text-muted-foreground mb-6">
+                        {error.message || 'Something went wrong. Please try again.'}
+                    </p>
+                    <Button onClick={() => window.location.reload()} className="w-full">
+                        Reload Page
+                    </Button>
+                </Card>
+            </div>
+        );
+    }
+
+    const handleInlineEdit = (taskId: string, field: string, value: string) => {
+        const task = tasks?.find((t: any) => t.id === taskId);
+        if (!task) return;
+
+        updateTask.mutate({
+            id: taskId,
+            orgId: org!.id,
+            [field]: value,
+        });
+    };
+
+    if (!firstProjectId) {
+        return (
+            <div className="flex items-center justify-center h-full">
+                <Card className="p-8 text-center max-w-md">
+                    <h2 className="text-xl font-semibold mb-2">No project selected</h2>
+                    <p className="text-muted-foreground">Select a project to view the backlog.</p>
+                </Card>
+            </div>
+        );
+    }
 
     return (
-        <div className="flex flex-col h-full p-6 space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Backlog</h1>
-                    <p className="text-muted-foreground text-sm">
-                        Manage tasks for {workspace.projects[0].name}
-                    </p>
-                </div>
-                <Button onClick={() => setIsModalOpen(true)}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Task
-                </Button>
-            </div>
-
-            {/* Filters */}
-            <div className="flex items-center gap-2">
-                <div className="relative w-64">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        placeholder="Search tasks..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-8"
-                    />
-                </div>
-
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-[140px]">
-                        <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="ALL">All Statuses</SelectItem>
-                        <SelectItem value="TODO">Todo</SelectItem>
-                        <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                        <SelectItem value="IN_REVIEW">In Review</SelectItem>
-                        <SelectItem value="DONE">Done</SelectItem>
-                    </SelectContent>
-                </Select>
-
-                <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                    <SelectTrigger className="w-[140px]">
-                        <SelectValue placeholder="Priority" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="ALL">All Priorities</SelectItem>
-                        <SelectItem value="LOW">Low</SelectItem>
-                        <SelectItem value="MEDIUM">Medium</SelectItem>
-                        <SelectItem value="HIGH">High</SelectItem>
-                        <SelectItem value="URGENT">Urgent</SelectItem>
-                    </SelectContent>
-                </Select>
-
-                {(searchQuery || priorityFilter !== 'ALL' || statusFilter !== 'ALL') && (
-                    <Button
-                        variant="ghost"
-                        onClick={() => {
-                            setSearchQuery('');
-                            setPriorityFilter('ALL');
-                            setStatusFilter('ALL');
-                        }}
-                    >
-                        Reset
-                    </Button>
-                )}
-            </div>
-
-            {/* List View */}
-            <div className="border rounded-md overflow-hidden">
-                {/* Sortable Header */}
-                <div className="grid grid-cols-12 gap-4 p-4 border-b bg-muted/50">
-                    <div className="col-span-5">
-                        <SortHeader label="Title" field="title" currentField={sortField} currentDir={sortDir} onSort={handleSort} />
-                    </div>
-                    <div className="col-span-2">
-                        <SortHeader label="Status" field="status" currentField={sortField} currentDir={sortDir} onSort={handleSort} />
-                    </div>
-                    <div className="col-span-2">
-                        <SortHeader label="Priority" field="priority" currentField={sortField} currentDir={sortDir} onSort={handleSort} />
-                    </div>
-                    <div className="col-span-3">
-                        <SortHeader label="Assignee" field="assignee" currentField={sortField} currentDir={sortDir} onSort={handleSort} />
-                    </div>
-                </div>
-
-                {/* Rows */}
-                <div className="divide-y">
-                    {processedTasks.length === 0 ? (
-                        <div className="p-8 text-center text-muted-foreground">
-                            No tasks found
+        <div className="flex flex-col h-full bg-gradient-to-b from-background to-muted/20">
+            {/* Header */}
+            <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                <div className="container py-4">
+                    <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                            <h1 className="text-2xl font-bold tracking-tight">Backlog</h1>
+                            <p className="text-sm text-muted-foreground">
+                                Manage and prioritize all tasks
+                            </p>
                         </div>
-                    ) : (
-                        processedTasks.map((task: any) => (
-                            <div
-                                key={task.id}
-                                className="grid grid-cols-12 gap-4 p-4 items-center hover:bg-muted/50 cursor-pointer transition-colors group"
-                                onClick={() => handleTaskClick(task)}
-                            >
-                                <div className="col-span-5 min-w-0">
-                                    <InlineTitle
-                                        value={task.title}
-                                        onSave={(newTitle) => handleInlineUpdate(task.id, { title: newTitle })}
-                                    />
-                                </div>
-                                <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
-                                    <InlineStatus
-                                        value={task.status}
-                                        onSave={(newStatus) => handleInlineUpdate(task.id, { status: newStatus })}
-                                    />
-                                </div>
-                                <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
-                                    <InlinePriority
-                                        value={task.priority}
-                                        onSave={(newPriority) => handleInlineUpdate(task.id, { priority: newPriority })}
-                                    />
-                                </div>
-                                <div className="col-span-3 flex items-center gap-2">
-                                    {task.assignee ? (
-                                        <>
-                                            <Avatar className="h-6 w-6">
-                                                <AvatarFallback className="text-[10px]">
-                                                    {task.assignee.name?.[0] || task.assignee.email[0].toUpperCase()}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            <span className="text-sm text-muted-foreground truncate">
-                                                {task.assignee.name || task.assignee.email.split('@')[0]}
-                                            </span>
-                                        </>
-                                    ) : (
-                                        <span className="text-sm text-muted-foreground italic">Unassigned</span>
-                                    )}
-                                </div>
-                            </div>
-                        ))
-                    )}
+                        <Button onClick={() => setIsModalOpen(true)}>
+                            <Plus className="mr-2 h-4 w-4" />
+                            New Task
+                        </Button>
+                    </div>
                 </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-auto p-6">
+                <Card>
+                    <CardContent className="p-0">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-[400px]">Task</TableHead>
+                                    <TableHead className="w-[120px]">Status</TableHead>
+                                    <TableHead className="w-[100px]">Priority</TableHead>
+                                    <TableHead className="w-[150px]">Assignee</TableHead>
+                                    <TableHead className="w-[120px]">Due Date</TableHead>
+                                    <TableHead className="w-[50px]"></TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {isLoading ? (
+                                    <TableRow>
+                                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                                            Loading tasks...
+                                        </TableCell>
+                                    </TableRow>
+                                ) : tasks?.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                                            No tasks yet. Create one to get started.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    tasks?.map((task: any) => (
+                                        <TableRow key={task.id} className="group hover:bg-muted/50">
+                                            <TableCell>
+                                                {inlineEdit?.id === task.id && inlineEdit?.field === 'title' ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <Input
+                                                            defaultValue={task.title}
+                                                            className="h-8"
+                                                            autoFocus
+                                                            onBlur={(e) => handleInlineEdit(task.id, 'title', e.target.value)}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') {
+                                                                    handleInlineEdit(task.id, 'title', e.currentTarget.value);
+                                                                } else if (e.key === 'Escape') {
+                                                                    setInlineEdit(null);
+                                                                }
+                                                            }}
+                                                        />
+                                                        <Button
+                                                            size="icon"
+                                                            variant="ghost"
+                                                            className="h-8 w-8"
+                                                            onClick={() => handleInlineEdit(task.id, 'title', (e.target as HTMLInputElement).value)}
+                                                        >
+                                                            <Check className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button
+                                                            size="icon"
+                                                            variant="ghost"
+                                                            className="h-8 w-8"
+                                                            onClick={() => setInlineEdit(null)}
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                ) : (
+                                                    <div
+                                                        className="cursor-pointer hover:text-primary transition-colors"
+                                                        onClick={() => setInlineEdit({ id: task.id, field: 'title', value: task.title })}
+                                                    >
+                                                        {task.title}
+                                                    </div>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Select
+                                                    defaultValue={task.status}
+                                                    onValueChange={(value) =>
+                                                        updateTask.mutate({
+                                                            id: task.id,
+                                                            orgId: org!.id,
+                                                            status: value as any,
+                                                        })
+                                                    }
+                                                >
+                                                    <SelectTrigger className="h-8 w-[110px]">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="TODO">To Do</SelectItem>
+                                                        <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                                                        <SelectItem value="IN_REVIEW">In Review</SelectItem>
+                                                        <SelectItem value="DONE">Done</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Select
+                                                    defaultValue={task.priority}
+                                                    onValueChange={(value) =>
+                                                        updateTask.mutate({
+                                                            id: task.id,
+                                                            orgId: org!.id,
+                                                            priority: value as any,
+                                                        })
+                                                    }
+                                                >
+                                                    <SelectTrigger className={cn('h-8 w-[90px]', PRIORITY_COLORS[task.priority])}>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="URGENT">🔴 Urgent</SelectItem>
+                                                        <SelectItem value="HIGH">🟠 High</SelectItem>
+                                                        <SelectItem value="MEDIUM">🟡 Medium</SelectItem>
+                                                        <SelectItem value="LOW">🟢 Low</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    {task.assignee ? (
+                                                        <>
+                                                            <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-medium">
+                                                                {task.assignee.name?.charAt(0).toUpperCase()}
+                                                            </div>
+                                                            <span className="text-sm">{task.assignee.name}</span>
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-sm text-muted-foreground">Unassigned</span>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Input
+                                                    type="date"
+                                                    defaultValue={task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : ''}
+                                                    className="h-8 w-[110px]"
+                                                    onChange={(e) =>
+                                                        updateTask.mutate({
+                                                            id: task.id,
+                                                            orgId: org!.id,
+                                                            dueDate: e.target.value || null,
+                                                        })
+                                                    }
+                                                />
+                                            </TableCell>
+                                            <TableCell>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        >
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onClick={(e) => {
+                                                            e.preventDefault();
+                                                            setEditingTask(task);
+                                                            setIsModalOpen(true);
+                                                        }}>
+                                                            <Pencil className="mr-2 h-4 w-4" />
+                                                            Edit
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            className="text-destructive"
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                deleteTask.mutate({ id: task.id });
+                                                            }}
+                                                        >
+                                                            <Trash2 className="mr-2 h-4 w-4" />
+                                                            Delete
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
             </div>
 
             <TaskModal
                 open={isModalOpen}
-                onOpenChange={handleModalClose}
+                onOpenChange={(open) => {
+                    setIsModalOpen(open);
+                    if (!open) setEditingTask(null);
+                }}
                 projectId={firstProjectId}
                 task={editingTask}
-            />
-
-            <TaskDetailPanel
-                open={isDetailOpen}
-                onOpenChange={setIsDetailOpen}
-                task={viewingTask}
-                onEdit={handleEditTask}
             />
         </div>
     );

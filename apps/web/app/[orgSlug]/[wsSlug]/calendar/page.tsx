@@ -45,7 +45,10 @@ export default function CalendarPage() {
 
     const { data: tasks, isLoading: tLoading } = trpc.task.listByProject.useQuery(
         { projectId: firstProjectId!, orgId: org?.id! },
-        { enabled: !!firstProjectId && !!org?.id }
+        { 
+            enabled: !!firstProjectId && !!org?.id,
+            staleTime: 1000 * 60 * 5,
+        }
     );
 
     const calendarDays = useMemo(() => {
@@ -78,17 +81,26 @@ export default function CalendarPage() {
         setIsModalOpen(true);
     };
 
-    if (wsLoading || tLoading) {
+    if (wsLoading || (firstProjectId && tLoading)) {
         return (
-            <div className="flex items-center justify-center h-full">
+            <div className="flex items-center justify-center h-full min-h-[400px]">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
         );
     }
 
-    if (!workspace || !firstProjectId) {
+    if (!workspace) {
         return (
-            <div className="p-8 text-center">
+            <div className="p-12 text-center">
+                <h2 className="text-xl font-semibold mb-2">Workspace not found</h2>
+                <p className="text-muted-foreground">Please select a valid workspace.</p>
+            </div>
+        );
+    }
+
+    if (!firstProjectId) {
+        return (
+            <div className="p-12 text-center">
                 <h2 className="text-xl font-semibold mb-2">No projects found</h2>
                 <p className="text-muted-foreground">Create a project to view the calendar.</p>
             </div>
@@ -102,7 +114,7 @@ export default function CalendarPage() {
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">Calendar</h1>
                     <p className="text-muted-foreground text-sm">
-                        Tasks by due date \u2014 {workspace.projects[0].name}
+                        Tasks by due date{workspace.projects[0] ? ` — ${workspace.projects[0].name}` : ''}
                     </p>
                 </div>
                 <div className="flex items-center gap-2">

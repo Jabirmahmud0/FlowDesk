@@ -1,37 +1,74 @@
-# Dependencies
+# ─── Dependencies ─────────────────────────────────────
 node_modules/
 .pnp
 .pnp.js
+.yarn/install-state.gz
 
-# Next.js
+# ─── Next.js ──────────────────────────────────────────
 .next/
 out/
-
-# Build
-dist/
 build/
 
-# Turbo
+# ─── Build Output ─────────────────────────────────────
+dist/
+*.tsbuildinfo
+
+# ─── Turbo ────────────────────────────────────────────
 .turbo/
 
-# Environment
+# ─── Environment Variables ────────────────────────────
 .env
-.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 !.env.example
 
-# IDE
-.vscode/
+# ─── Logs ─────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ─── IDE ──────────────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
 .idea/
 *.swp
 *.swo
+*~
 
-# OS
+# ─── OS ───────────────────────────────────────────────
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+Desktop.ini
 
-# Testing
+# ─── Testing ──────────────────────────────────────────
 coverage/
+.nyc_output/
+playwright-report/
+test-results/
 
-# Misc
-*.log
-npm-debug.log*
+# ─── Firebase ─────────────────────────────────────────
+firebase-debug.log
+firestore-debug.log
+.ui*
+*-service-account.json
+
+# ─── Misc ─────────────────────────────────────────────
+*.pem
+.vercel
+.cache/
+temp/
+.tmp/
+
+# ─── Docker ───────────────────────────────────────────
+docker-compose.override.yml

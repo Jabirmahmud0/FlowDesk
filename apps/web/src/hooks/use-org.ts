@@ -9,7 +9,7 @@ export function useOrg() {
     const router = useRouter();
     const slug = params?.orgSlug as string | undefined;
 
-    const { data: org, isLoading, error, isError } = trpc.org.getBySlug.useQuery(
+    const { data: org, isLoading: isQueryLoading, error, isError } = trpc.org.getBySlug.useQuery(
         { slug: slug! },
         {
             enabled: !!slug,
@@ -21,6 +21,8 @@ export function useOrg() {
             }
         }
     );
+
+    const isLoading = isQueryLoading || !slug;
 
     // First-time users: org not found or no membership → onboarding wizard
     useEffect(() => {
