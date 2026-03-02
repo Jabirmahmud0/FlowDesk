@@ -13,6 +13,10 @@ const nextConfig = {
     // Production optimizations
     poweredByHeader: false,
     compress: true,
+    // Skip ESLint during production builds (run separately in CI)
+    eslint: {
+        ignoreDuringBuilds: true,
+    },
 };
 
 export default nextConfig;
