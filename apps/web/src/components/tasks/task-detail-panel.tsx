@@ -35,6 +35,7 @@ const priorityColors = {
     MEDIUM: 'bg-blue-500',
     HIGH: 'bg-orange-500',
     URGENT: 'bg-red-500',
+    NONE: 'bg-slate-300',
 };
 
 export function TaskDetailPanel({ open, onOpenChange, task, onEdit }: Props) {

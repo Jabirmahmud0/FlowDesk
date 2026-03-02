@@ -96,7 +96,7 @@ export const resolvers = {
         invitations: async (org: any) => {
             return await db.query.invitations.findMany({
                 where: and(eq(invitations.orgId, org.id), isNull(invitations.acceptedAt)),
-                with: { invitedBy: true },
+                with: { inviter: true },
             });
         },
         subscription: async (org: any) => {
@@ -267,7 +267,7 @@ export const resolvers = {
             return await db.query.documentVersions.findMany({
                 where: eq(documentVersions.documentId, doc.id),
                 orderBy: desc(documentVersions.createdAt),
-                with: { createdBy: true },
+                with: { creator: true },
             });
         },
         comments: async (doc: any) => {
@@ -332,6 +332,7 @@ export const resolvers = {
         expiresAt: (inv: any) => formatDate(inv.expiresAt),
         acceptedAt: (inv: any) => formatDate(inv.acceptedAt),
         invitedBy: async (inv: any) => {
+            if (inv.inviter) return inv.inviter;
             const [user] = await db.select().from(users).where(eq(users.id, inv.invitedBy));
             return user;
         },
@@ -621,6 +622,7 @@ export const resolvers = {
                 name: input.name,
                 slug: input.slug,
                 plan: 'FREE',
+                createdBy: userId,
             }).returning();
 
             // Create owner membership
@@ -898,7 +900,6 @@ export const resolvers = {
             if (!userId) throw new Error('Unauthorized');
 
             const [comment] = await db.insert(comments).values({
-                orgId: input.orgId,
                 taskId: input.taskId,
                 userId,
                 content: input.content,
@@ -974,9 +975,19 @@ export const resolvers = {
             const [doc] = await db.select().from(documents).where(eq(documents.id, documentId));
             if (!doc) throw new Error('Document not found');
 
+            // Get next version number
+            const [lastVersion] = await db
+                .select()
+                .from(documentVersions)
+                .where(eq(documentVersions.documentId, documentId))
+                .orderBy(desc(documentVersions.versionNumber))
+                .limit(1);
+            const nextVersionNumber = (lastVersion?.versionNumber ?? 0) + 1;
+
             const [version] = await db.insert(documentVersions).values({
                 documentId,
                 orgId: doc.orgId,
+                versionNumber: nextVersionNumber,
                 title,
                 content,
                 changeNote,

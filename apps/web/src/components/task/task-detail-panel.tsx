@@ -53,8 +53,8 @@ export function TaskDetailPanel({ taskId, orgId, onClose }: TaskDetailPanelProps
     );
 
     const { data: comments } = trpc.comment.listByTask.useQuery(
-        { taskId: taskId! },
-        { enabled: !!taskId }
+        { orgId: orgId!, taskId: taskId! },
+        { enabled: !!taskId && !!orgId }
     );
 
     const updateTask = trpc.task.update.useMutation({
@@ -297,9 +297,9 @@ export function TaskDetailPanel({ taskId, orgId, onClose }: TaskDetailPanelProps
                         <Label className="text-muted-foreground">Description</Label>
                         <div className="border rounded-md min-h-[200px]">
                             <EnhancedEditor
-                                content={editedDescription}
+                                value={editedDescription || ''}
                                 onChange={setEditedDescription}
-                                editable={isEditing}
+                                readOnly={!isEditing}
                             />
                         </div>
                     </div>

@@ -18,7 +18,7 @@ export function CustomBrandingSettings() {
     const [secondaryColor, setSecondaryColor] = useState('#000000');
     const [logoUrl, setLogoUrl] = useState('');
 
-    const updateOrg = trpc.organization.update.useMutation({
+    const updateOrg = trpc.org.update.useMutation({
         onSuccess: () => {
             toast({
                 title: 'Branding updated',
@@ -38,8 +38,7 @@ export function CustomBrandingSettings() {
         if (!org?.id) return;
         updateOrg.mutate({
             orgId: org.id,
-            logoUrl: logoUrl || null,
-            // Note: Add customColor fields to schema if needed
+            logoUrl: logoUrl || undefined,
         });
     };
 

@@ -16,7 +16,7 @@ interface PlanRestrictionBannerProps {
 
 export function PlanRestrictionBanner({ currentPlan, feature, orgId }: PlanRestrictionBannerProps) {
     const router = useRouter();
-    const limits = PLAN_LIMITS[currentPlan];
+    const limits = PLAN_LIMITS[currentPlan] as any;
     const hasAccess = limits[feature];
 
     if (hasAccess && hasAccess !== 'basic') {

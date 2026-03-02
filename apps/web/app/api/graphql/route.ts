@@ -1,8 +1,7 @@
 import { startServerAndCreateNextHandler } from '@as-integrations/next';
 import { ApolloServer } from '@apollo/server';
 import { typeDefs, resolvers, type GraphQLContext } from '@flowdesk/graphql';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 
 const server = new ApolloServer<GraphQLContext>({
     typeDefs,
@@ -18,12 +17,13 @@ const server = new ApolloServer<GraphQLContext>({
 
 const handler = startServerAndCreateNextHandler(server, {
     context: async (req) => {
-        const session = await getServerSession(authOptions);
-        
+        const session = await auth();
+        const headers = req.headers as any;
+
         return {
             userId: session?.user?.id ?? null,
-            orgId: req.headers.get('x-org-id') ?? null,
-            wsId: req.headers.get('x-ws-id') ?? null,
+            orgId: headers.get?.('x-org-id') ?? headers['x-org-id'] ?? null,
+            wsId: headers.get?.('x-ws-id') ?? headers['x-ws-id'] ?? null,
         };
     },
 });

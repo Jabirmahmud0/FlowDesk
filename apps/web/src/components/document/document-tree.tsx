@@ -158,7 +158,7 @@ function TreeNode({ node, expandedIds, onToggle, onNavigate, activeId, level }: 
                                 key={child.id}
                                 node={child}
                                 expandedIds={expandedIds}
-                                onToggle={toggleExpand}
+                                onToggle={onToggle}
                                 onNavigate={onNavigate}
                                 activeId={activeId}
                                 level={level + 1}

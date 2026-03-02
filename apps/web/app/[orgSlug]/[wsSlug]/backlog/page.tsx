@@ -195,7 +195,10 @@ export default function BacklogPage() {
                                                             size="icon"
                                                             variant="ghost"
                                                             className="h-8 w-8"
-                                                            onClick={() => handleInlineEdit(task.id, 'title', (e.target as HTMLInputElement).value)}
+                                                            onClick={() => {
+                                                                const input = document.querySelector('input[type="text"]') as HTMLInputElement;
+                                                                if (input) handleInlineEdit(task.id, 'title', input.value);
+                                                            }}
                                                         >
                                                             <Check className="h-4 w-4" />
                                                         </Button>

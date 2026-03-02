@@ -176,7 +176,7 @@ export default function AnalyticsPage() {
                     <StatCard
                         title="Completion Rate"
                         value={`${completionRate.toFixed(1)}%`}
-                        description={`${completion.completed} of ${completion.total} tasks completed`}
+                        description={`${completion.done || 0} of ${completion.total} tasks completed`}
                         icon={CheckCircle2}
                         trend={completionTrend === 'positive' ? 8 : completionTrend === 'neutral' ? 0 : -5}
                         trendLabel="vs last period"
@@ -311,7 +311,7 @@ export default function AnalyticsPage() {
                                             dataKey="value"
                                             nameKey="name"
                                             label={({ name, percent }) =>
-                                                `${name} ${(percent * 100).toFixed(0)}%`
+                                                `${name} ${((percent || 0) * 100).toFixed(0)}%`
                                             }
                                             labelLine={false}
                                         >
@@ -417,7 +417,6 @@ export default function AnalyticsPage() {
                         trend={5}
                         trendLabel="improvement"
                         icon={TrendingUp}
-                        trendType="positive"
                     />
                     <InsightCard
                         title="Pending Reviews"

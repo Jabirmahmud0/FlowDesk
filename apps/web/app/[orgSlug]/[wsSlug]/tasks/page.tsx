@@ -9,7 +9,7 @@ import { Plus, List, LayoutGrid } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { BoardView } from '@/components/kanban/board';
+import { KanbanBoard } from '@/components/kanban/board';
 
 export default function TasksPage() {
     const { org } = useOrg();
@@ -22,10 +22,7 @@ export default function TasksPage() {
         { enabled: !!org?.id && !!workspace?.id }
     );
 
-    const { data: labels } = trpc.task.labelsByOrg.useQuery(
-        { orgId: org?.id! },
-        { enabled: !!org?.id }
-    );
+    const labels: any[] = [];
 
     if (isLoading) {
         return (
@@ -77,15 +74,14 @@ export default function TasksPage() {
             <div className="flex-1 overflow-auto">
                 {view === 'list' ? (
                     <TaskListView
-                        tasks={tasks || []}
+                        tasks={tasks as any || []}
                         orgId={org?.id!}
                         onSelectionChange={(ids) => console.log('Selected:', ids)}
-                        onTaskUpdate={(task) => router.push(`/${org?.slug}/${workspace?.slug}/tasks/${task.id}`)}
+                        onTaskUpdate={(task: any) => router.push(`/${org?.slug}/${workspace?.slug}/tasks/${task.id}`)}
                     />
                 ) : (
-                    <BoardView
-                        tasks={tasks || []}
-                        labels={labels || []}
+                    <KanbanBoard
+                        initialTasks={tasks as any || []}
                         orgId={org?.id!}
                         projectId={workspace?.id!}
                     />

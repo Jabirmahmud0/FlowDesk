@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Task, Project } from '@flowdesk/db';
+import type { InferSelectModel } from 'drizzle-orm';
+import { tasks, projects } from '@flowdesk/db';
 import {
     createColumnHelper,
     flexRender,
@@ -41,6 +42,9 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
+
+type Task = InferSelectModel<typeof tasks>;
+type Project = InferSelectModel<typeof projects>;
 
 interface TaskWithRelations extends Task {
     assignee?: { name: string; avatarUrl?: string | null } | null;

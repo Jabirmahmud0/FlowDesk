@@ -49,6 +49,7 @@ import { broadcastTask, broadcastComment, broadcastDocument } from './lib/socket
 import { randomUUID } from 'crypto';
 import { billingRouter } from './routers/billing';
 import { attachmentsRouter } from './routers/attachments';
+import { apiKeyRouter } from './routers/api-key';
 import { checkMemberLimit, checkProjectLimit, checkActivityHistoryLimit } from './lib/plan-limits';
 import { sendInviteEmail } from './lib/email';
 
@@ -1395,6 +1396,18 @@ export const labelRouter = router({
             return { success: true };
         }),
 
+    update: createOrgProcedure('MEMBER')
+        .input(z.object({ orgId: z.string().uuid(), id: z.string().uuid(), name: z.string().min(1).max(50), color: z.string().regex(/^#[0-9a-fA-F]{6}$/) }))
+        .mutation(async ({ ctx, input }) => {
+            const { orgId, id, ...data } = input;
+            const [updated] = await ctx.db
+                .update(taskLabels)
+                .set(data)
+                .where(eq(taskLabels.id, id))
+                .returning();
+            return updated;
+        }),
+
     assign: createOrgProcedure('MEMBER')
         .input(z.object({ orgId: z.string().uuid(), taskId: z.string().uuid(), labelId: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
@@ -1751,6 +1764,7 @@ export const appRouter = router({
     analytics: analyticsRouter,
     search: searchRouter,
     user: userRouter,
+    apiKey: apiKeyRouter,
 });
 
 export type AppRouter = typeof appRouter;

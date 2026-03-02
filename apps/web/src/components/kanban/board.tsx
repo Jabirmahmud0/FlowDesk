@@ -64,7 +64,9 @@ export function KanbanBoard({ projectId, orgId, initialTasks, onTaskClick }: Pro
             };
             toast({
                 title: 'Task moved',
-                description: `Task moved to ${statusLabels[variables.status] || variables.status}`,
+                description: variables.status 
+                    ? `Task moved to ${statusLabels[variables.status] || variables.status}`
+                    : 'Task updated successfully',
                 duration: 2000,
             });
         },

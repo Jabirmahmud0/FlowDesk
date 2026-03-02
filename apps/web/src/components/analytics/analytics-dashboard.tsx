@@ -117,8 +117,8 @@ export function AnalyticsDashboard() {
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart
                                     data={[
-                                        { name: 'Completed', value: completion?.completed || 0 },
-                                        { name: 'Remaining', value: (completion?.total || 0) - (completion?.completed || 0) },
+                                        { name: 'Completed', value: completion?.done || 0 },
+                                        { name: 'Remaining', value: (completion?.total || 0) - (completion?.done || 0) },
                                     ]}
                                 >
                                     <CartesianGrid strokeDasharray="3 3" />

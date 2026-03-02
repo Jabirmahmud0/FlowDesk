@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import admin from 'firebase-admin';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,10 +17,9 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 if (!admin.apps.length) {
     // Use service account JSON file if it exists, otherwise use env vars
     const serviceAccountPath = path.resolve(__dirname, '../firebase-service-account.json');
-    const fs = require('fs');
-    
+
     if (fs.existsSync(serviceAccountPath)) {
-        const serviceAccount = require(serviceAccountPath);
+        const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf-8'));
         admin.initializeApp({
             credential: admin.credential.cert(serviceAccount),
         });

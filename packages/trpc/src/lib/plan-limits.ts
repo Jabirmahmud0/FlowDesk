@@ -8,7 +8,7 @@
 import { PLAN_LIMITS, type Plan } from '@flowdesk/types';
 import { TRPCError } from '@trpc/server';
 import { eq, sql, sum } from 'drizzle-orm';
-import { orgMembers, projects, subscriptions, attachments } from '@flowdesk/db';
+import { orgMembers, projects, subscriptions, attachments, tasks } from '@flowdesk/db';
 
 type DB = any; // Use actual Drizzle client type if available
 
@@ -67,10 +67,12 @@ export async function checkStorageLimit(db: DB, orgId: string, additionalSizeByt
 
     const maxStorageBytes = limits.maxStorageMB * 1024 * 1024;
 
+    // Join attachments with tasks to get orgId
     const [result] = await db
         .select({ total: sum(attachments.size) })
         .from(attachments)
-        .where(eq(attachments.orgId, orgId));
+        .innerJoin(tasks, eq(attachments.taskId, tasks.id))
+        .where(eq(tasks.orgId, orgId));
 
     const currentStorage = Number(result?.total) || 0;
 

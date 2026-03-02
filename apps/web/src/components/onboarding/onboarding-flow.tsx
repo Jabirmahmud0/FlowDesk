@@ -52,10 +52,10 @@ export function OnboardingFlow() {
     const [projectName, setProjectName] = useState('');
     const [projectSlug, setProjectSlug] = useState('');
 
-    const createOrg = trpc.organization.create.useMutation();
+    const createOrg = trpc.org.create.useMutation();
     const createWorkspace = trpc.workspace.create.useMutation();
     const createProject = trpc.project.create.useMutation();
-    const inviteMember = trpc.member.invite.useMutation();
+    const inviteMember = trpc.members.invite.useMutation();
 
     const handleNext = async () => {
         if (currentStep === 1 && orgName && orgSlug) {
@@ -96,11 +96,10 @@ export function OnboardingFlow() {
                     {steps.map((step, index) => (
                         <div key={step.id} className="flex items-center">
                             <div
-                                className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors ${
-                                    index + 1 <= currentStep
+                                className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors ${index + 1 <= currentStep
                                         ? 'bg-primary border-primary text-primary-foreground'
                                         : 'border-muted bg-muted text-muted-foreground'
-                                }`}
+                                    }`}
                             >
                                 {index + 1 < currentStep ? (
                                     <Check className="h-5 w-5" />
@@ -110,9 +109,8 @@ export function OnboardingFlow() {
                             </div>
                             {index < steps.length - 1 && (
                                 <div
-                                    className={`w-16 h-0.5 mx-2 ${
-                                        index + 1 < currentStep ? 'bg-primary' : 'bg-muted'
-                                    }`}
+                                    className={`w-16 h-0.5 mx-2 ${index + 1 < currentStep ? 'bg-primary' : 'bg-muted'
+                                        }`}
                                 />
                             )}
                         </div>

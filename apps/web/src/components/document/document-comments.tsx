@@ -45,9 +45,9 @@ export function DocumentComments({
     const [replyingTo, setReplyingTo] = useState<string | null>(null);
     const [replyContent, setReplyContent] = useState('');
 
-    const handleReply = (parentId: string) => {
-        if (!replyContent.trim()) return;
-        onAddComment(replyContent, parentId);
+    const handleReply = (parentId: string, content: string) => {
+        if (!content.trim()) return;
+        onAddComment(content, parentId);
         setReplyingTo(null);
         setReplyContent('');
     };
@@ -82,7 +82,7 @@ export function DocumentComments({
 
 interface CommentThreadProps {
     comment: Comment;
-    onReply: (content: string) => void;
+    onReply: (content: string, parentId?: string) => void;
     onEdit: (content: string) => void;
     onDelete: () => void;
     replyingTo: string | null;

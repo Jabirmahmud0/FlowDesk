@@ -25,6 +25,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { cn } from '@/lib/utils';
 
 export function TaskLabelsManager() {
     const { org } = useOrg();
@@ -34,12 +35,12 @@ export function TaskLabelsManager() {
     const [newLabelName, setNewLabelName] = useState('');
     const [newLabelColor, setNewLabelColor] = useState('#3b82f6');
 
-    const { data: labels, isLoading, refetch } = trpc.task.labelsByOrg.useQuery(
+    const { data: labels, isLoading, refetch } = trpc.label.listByOrg.useQuery(
         { orgId: org?.id! },
         { enabled: !!org?.id }
     );
 
-    const createLabel = trpc.task.createLabel.useMutation({
+    const createLabel = trpc.label.create.useMutation({
         onSuccess: () => {
             toast({ title: 'Label created' });
             setIsCreateOpen(false);
@@ -52,7 +53,7 @@ export function TaskLabelsManager() {
         },
     });
 
-    const updateLabel = trpc.task.updateLabel.useMutation({
+    const updateLabel = trpc.label.update.useMutation({
         onSuccess: () => {
             toast({ title: 'Label updated' });
             setEditingLabel(null);
@@ -63,7 +64,7 @@ export function TaskLabelsManager() {
         },
     });
 
-    const deleteLabel = trpc.task.deleteLabel.useMutation({
+    const deleteLabel = trpc.label.delete.useMutation({
         onSuccess: () => {
             toast({ title: 'Label deleted' });
             refetch();
@@ -208,7 +209,7 @@ export function TaskLabelsManager() {
                                         </DropdownMenuItem>
                                         <DropdownMenuItem
                                             className="text-destructive"
-                                            onClick={() => deleteLabel.mutate({ id: label.id })}
+                                            onClick={() => org && deleteLabel.mutate({ orgId: org.id, id: label.id })}
                                         >
                                             <Trash2 className="h-4 w-4 mr-2" />
                                             Delete
@@ -269,8 +270,4 @@ export function TaskLabelsManager() {
             </CardContent>
         </Card>
     );
-}
-
-function cn(...classes: (string | undefined | null | false)[]) {
-    return classes.filter(Boolean).join(' ');
 }
