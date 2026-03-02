@@ -1,11 +1,10 @@
 'use client';
 
-import * as Sentry from '@sentry/nextjs';
 import { useEffect } from 'react';
 
 /**
  * Global error boundary for the Next.js app.
- * Captures unhandled errors and reports them to Sentry.
+ * Captures unhandled errors and logs them.
  *
  * This component is rendered by Next.js when an error occurs
  * in a page or layout component (error.tsx convention).
@@ -18,7 +17,7 @@ export default function GlobalError({
     reset: () => void;
 }) {
     useEffect(() => {
-        Sentry.captureException(error);
+        console.error('[GlobalError]', error);
     }, [error]);
 
     return (
