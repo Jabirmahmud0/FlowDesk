@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    transpilePackages: ['@flowdesk/db', '@flowdesk/trpc', '@flowdesk/types'],
+    transpilePackages: ['@flowdesk/db', '@flowdesk/trpc', '@flowdesk/types', '@flowdesk/graphql'],
     output: 'standalone',
+    outputFileTracingRoot: '../../',
     images: {
         remotePatterns: [
             { protocol: 'https', hostname: 'res.cloudinary.com' },
