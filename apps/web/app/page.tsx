@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
-import LandingPage from './(marketing)/page';
+import LandingPage from './(marketing)/components/landing-page';
 
 // Root page: redirect authenticated users to dashboard,
 // otherwise render the marketing landing page

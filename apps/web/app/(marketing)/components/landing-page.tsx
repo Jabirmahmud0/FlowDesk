@@ -288,7 +288,7 @@ export default function LandingPage() {
                                         <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                                     ))}
                                 </div>
-                                <p className="text-sm text-muted-foreground leading-relaxed flex-1">"{t.text}"</p>
+                                <p className="text-sm text-muted-foreground leading-relaxed flex-1">&quot;{t.text}&quot;</p>
                                 <div className="flex items-center gap-3">
                                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
                                         {t.avatar}
@@ -398,4 +398,3 @@ export default function LandingPage() {
         </div>
     );
 }
-
