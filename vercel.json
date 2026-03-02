@@ -1,6 +1,5 @@
 {
   "framework": "nextjs",
-  "buildCommand": "cd ../.. && npx turbo build --filter=@flowdesk/web...",
-  "installCommand": "npm install",
-  "outputDirectory": "apps/web/.next"
+  "buildCommand": "npx turbo build --filter=@flowdesk/web...",
+  "installCommand": "npm install"
 }
